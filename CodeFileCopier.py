@@ -1,7 +1,6 @@
 import wx
 import os
 
-
 class TreeNode:
     """Classe para representar nós da árvore binária."""
     def __init__(self, name):
@@ -37,9 +36,17 @@ class MyFrame(wx.Frame):
         self.source_dir_picker = wx.DirPickerCtrl(panel, message="Selecione o diretório de origem")
         self.sizer.Add(self.source_dir_picker, 0, wx.ALL | wx.EXPAND, 5)
 
+        # Adiciona suporte a arrastar e soltar para o diretório de origem
+        self.source_droptarget = FileDropTarget(self.source_dir_picker)
+        self.source_dir_picker.SetDropTarget(self.source_droptarget)
+
         # Seletor de diretório de saída
         self.output_dir_picker = wx.DirPickerCtrl(panel, message="Selecione o diretório de saída")
         self.sizer.Add(self.output_dir_picker, 0, wx.ALL | wx.EXPAND, 5)
+
+        # Adiciona suporte a arrastar e soltar para o diretório de saída
+        self.output_droptarget = FileDropTarget(self.output_dir_picker)
+        self.output_dir_picker.SetDropTarget(self.output_droptarget)
 
         self.copy_button = wx.Button(panel, label="Copiar Arquivos")
         self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
@@ -93,6 +100,17 @@ class MyFrame(wx.Frame):
                 with open(path, "r", encoding="utf-8", errors="ignore") as code_file:
                     output_file.write(f"Conteúdo de {item}:\n")
                     output_file.write(code_file.read() + "\n\n")
+
+
+class FileDropTarget(wx.FileDropTarget):
+    def __init__(self, dir_picker):
+        super().__init__()
+        self.dir_picker = dir_picker
+
+    def OnDropFiles(self, x, y, filenames):
+        if len(filenames) > 0 and os.path.isdir(filenames[0]):
+            self.dir_picker.SetPath(filenames[0])
+        return True
 
 
 if __name__ == "__main__":
