@@ -49,7 +49,7 @@ class MyFrame(wx.Frame):
         self.output_dir_picker.SetDropTarget(self.output_droptarget)
 
         self.copy_button = wx.Button(panel, label="Copiar Arquivos")
-        self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
+        self.copy_button.Bind(wx.EVT_BUTTON, self.on_select_extensions)
         self.sizer.Add(self.copy_button, 0, wx.ALL | wx.CENTER, 5)
 
         self.output_text = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY)
@@ -57,6 +57,31 @@ class MyFrame(wx.Frame):
 
         panel.SetSizer(self.sizer)
         self.SetSize((600, 400))
+
+        self.selected_extensions = []  # Inicializa a lista de extensões selecionadas
+
+    def on_select_extensions(self, event):
+        source_directory = self.source_dir_picker.GetPath()
+        
+        if not source_directory:
+            wx.MessageBox("Por favor, selecione um diretório de origem.", "Erro", wx.OK | wx.ICON_ERROR)
+            return
+        
+        # Listar extensões de arquivos em todas as subpastas
+        extensions = set()
+        for root, dirs, files in os.walk(source_directory):
+            for file in files:
+                ext = os.path.splitext(file)[1]
+                extensions.add(ext)
+
+        # Criar uma janela de seleção de extensões
+        dlg = wx.MultiChoiceDialog(self, "Selecione as extensões que deseja copiar:", "Selecionar Extensões", list(extensions))
+        dlg.SetSelections([0])  # Seleciona a primeira opção por padrão
+        if dlg.ShowModal() == wx.ID_OK:
+            selected_indices = dlg.GetSelections()
+            self.selected_extensions = [list(extensions)[i] for i in selected_indices]
+            self.on_copy(event)
+        dlg.Destroy()
 
     def on_copy(self, event):
         source_directory = self.source_dir_picker.GetPath()
@@ -94,7 +119,7 @@ class MyFrame(wx.Frame):
                 child_node = TreeNode(item)
                 tree_node.add_child(child_node)
                 self.copy_files(path, child_node, output_file)
-            elif item.endswith((".py", ".java", ".c", ".cpp", ".js", ".html", ".css", ".xml", ".txt", ".log", ".bat", ".jar", ".class", ".php", ".rb")):
+            elif os.path.splitext(item)[1] in self.selected_extensions:
                 self.output_text.AppendText(f"- {item}\n")
                 tree_node.add_child(TreeNode(item))
                 with open(path, "r", encoding="utf-8", errors="ignore") as code_file:
