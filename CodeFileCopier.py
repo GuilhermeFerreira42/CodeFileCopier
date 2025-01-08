@@ -94,7 +94,7 @@ class MyFrame(wx.Frame):
                 child_node = TreeNode(item)
                 tree_node.add_child(child_node)
                 self.copy_files(path, child_node, output_file)
-            elif item.endswith((".py", ".java", ".c", ".cpp", ".js", ".html", ".css")):
+            elif item.endswith((".py", ".java", ".c", ".cpp", ".js", ".html", ".css", ".xml", ".txt", ".log", ".bat", ".jar", ".class", ".php", ".rb")):
                 self.output_text.AppendText(f"- {item}\n")
                 tree_node.add_child(TreeNode(item))
                 with open(path, "r", encoding="utf-8", errors="ignore") as code_file:
