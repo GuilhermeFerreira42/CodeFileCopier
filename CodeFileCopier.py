@@ -74,13 +74,62 @@ class MyFrame(wx.Frame):
                 ext = os.path.splitext(file)[1]
                 extensions.add(ext)
 
-        # Criar uma janela de seleção de extensões
-        dlg = wx.MultiChoiceDialog(self, "Selecione as extensões que deseja copiar:", "Selecionar Extensões", list(extensions))
-        dlg.SetSelections([0])  # Seleciona a primeira opção por padrão
+        # Listar extensões de arquivos em todas as subpastas
+        extensions = sorted(set(
+            os.path.splitext(file)[1] 
+            for root, _, files in os.walk(source_directory) 
+            for file in files
+        ))
+
+        # Criar janela personalizada para seleção de extensões
+        dlg = wx.Dialog(self, title="Selecionar Extensões", size=(400, 300))
+        dlg_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        instructions = wx.StaticText(dlg, label="Selecione as extensões que deseja copiar:")
+        dlg_sizer.Add(instructions, 0, wx.ALL, 10)
+
+        self.extension_checklist = wx.CheckListBox(dlg, choices=extensions)
+        dlg_sizer.Add(self.extension_checklist, 1, wx.ALL | wx.EXPAND, 10)
+
+        # Botões de "Selecionar Tudo" e "Desmarcar Tudo"
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        select_all_button = wx.Button(dlg, label="Selecionar Tudo")
+        deselect_all_button = wx.Button(dlg, label="Desmarcar Tudo")
+        button_sizer.Add(select_all_button, 1, wx.ALL, 5)
+        button_sizer.Add(deselect_all_button, 1, wx.ALL, 5)
+        dlg_sizer.Add(button_sizer, 0, wx.ALIGN_CENTER)
+
+        # Botões OK e Cancelar
+        action_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        ok_button = wx.Button(dlg, wx.ID_OK, label="OK")
+        cancel_button = wx.Button(dlg, wx.ID_CANCEL, label="Cancelar")
+        action_sizer.Add(ok_button, 1, wx.ALL, 5)
+        action_sizer.Add(cancel_button, 1, wx.ALL, 5)
+        dlg_sizer.Add(action_sizer, 0, wx.ALIGN_CENTER)
+
+        dlg.SetSizer(dlg_sizer)
+
+        # Event handlers para os botões
+        def select_all(event):
+            for i in range(self.extension_checklist.GetCount()):
+                self.extension_checklist.Check(i, True)
+
+        def deselect_all(event):
+            for i in range(self.extension_checklist.GetCount()):
+                self.extension_checklist.Check(i, False)
+
+        select_all_button.Bind(wx.EVT_BUTTON, select_all)
+        deselect_all_button.Bind(wx.EVT_BUTTON, deselect_all)
+
+        # Mostrar o diálogo
         if dlg.ShowModal() == wx.ID_OK:
-            selected_indices = dlg.GetSelections()
-            self.selected_extensions = [list(extensions)[i] for i in selected_indices]
+            self.selected_extensions = [
+                extensions[i] 
+                for i in range(self.extension_checklist.GetCount()) 
+                if self.extension_checklist.IsChecked(i)
+            ]
             self.on_copy(event)
+
         dlg.Destroy()
 
     def on_copy(self, event):
