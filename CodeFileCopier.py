@@ -38,7 +38,7 @@ class MyApp(wx.App):
 
 class MyFrame(wx.Frame):
     def __init__(self):
-        super().__init__(parent=None, title="Copiar Arquivos de Código")
+        super().__init__(parent=None, title="INICIAR de Código")
         panel = wx.Panel(self)
 
         self.sizer = wx.BoxSizer(wx.VERTICAL)
@@ -73,8 +73,20 @@ class MyFrame(wx.Frame):
         self.notebook.AddPage(self.file_panel, "Selecionar Arquivos")
         self.setup_file_panel()
 
+        # Remover vinculações anteriores
+        # self.extension_panel.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)
+        # self.file_panel.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)
+
+        # Configurar acelerador para a tecla 'Esc'
+        esc_id = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, self.on_esc_pressed, id=esc_id)
+        accel_tbl = wx.AcceleratorTable([(wx.ACCEL_NORMAL, wx.WXK_ESCAPE, esc_id)])
+        self.SetAcceleratorTable(accel_tbl)
+
+
+
         # Botão de copiar
-        self.copy_button = wx.Button(panel, label="Copiar Arquivos")
+        self.copy_button = wx.Button(panel, label="INICIAR")
         self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
         self.sizer.Add(self.copy_button, 0, wx.ALL | wx.CENTER, 5)
 
@@ -104,7 +116,6 @@ class MyFrame(wx.Frame):
         search_label = wx.StaticText(self.extension_panel, label="Pesquisar extensões:")
         self.extension_search = wx.TextCtrl(self.extension_panel)
         self.extension_search.Bind(wx.EVT_TEXT, self.filter_extensions)
-        self.extension_search.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)  # Vincula o evento de tecla
         search_sizer.Add(search_label, 0, wx.ALL | wx.ALIGN_CENTER, 5)
         search_sizer.Add(self.extension_search, 1, wx.ALL | wx.EXPAND, 5)
         sizer.Add(search_sizer, 0, wx.ALL | wx.EXPAND, 10)
@@ -136,7 +147,6 @@ class MyFrame(wx.Frame):
         search_label = wx.StaticText(self.file_panel, label="Pesquisar arquivos:")
         self.file_search = wx.TextCtrl(self.file_panel)
         self.file_search.Bind(wx.EVT_TEXT, self.filter_files)
-        self.file_search.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)  # Vincula o evento de tecla
         search_sizer.Add(search_label, 0, wx.ALL | wx.ALIGN_CENTER, 5)
         search_sizer.Add(self.file_search, 1, wx.ALL | wx.EXPAND, 5)
         sizer.Add(search_sizer, 0, wx.ALL | wx.EXPAND, 10)
@@ -161,18 +171,18 @@ class MyFrame(wx.Frame):
         select_all_files_button.Bind(wx.EVT_BUTTON, self.select_all_files)
         deselect_all_files_button.Bind(wx.EVT_BUTTON, self.deselect_all_files)
 
-    def on_search_key_down(self, event):
-        """Limpa o texto da barra de pesquisa ao pressionar 'Esc'."""
-        if event.GetKeyCode() == wx.WXK_ESCAPE:  # Verifica se a tecla 'Esc' foi pressionada
-            search_ctrl = event.GetEventObject()
-            search_ctrl.SetValue("")  # Limpa o texto
-            # Atualiza a lista correspondente após limpar
-            if search_ctrl == self.extension_search:
-                self.filter_extensions(None)
-            elif search_ctrl == self.file_search:
-                self.filter_files(None)
-        else:
-            event.Skip()  # Propaga outras teclas normalmente
+    def on_esc_pressed(self, event):
+        """Limpa a barra de pesquisa da aba ativa e retorna o foco para ela."""
+        current_page = self.notebook.GetSelection()
+        if current_page == 0:  # Aba de extensões
+            self.extension_search.SetValue("")  # Limpa o texto
+            self.filter_extensions(None)  # Atualiza a lista de extensões
+            self.extension_search.SetFocus()  # Retorna o foco
+        elif current_page == 1:  # Aba de arquivos
+            self.file_search.SetValue("")  # Limpa o texto
+            self.filter_files(None)  # Atualiza a lista de arquivos
+            self.file_search.SetFocus()  # Retorna o foco
+
 
     def update_lists(self, event):
         source_directory = self.source_dir_picker.GetPath()
