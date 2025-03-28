@@ -1,5 +1,6 @@
 import wx
 import os
+import re
 
 class TreeNode:
     """Classe para representar nós da árvore binária."""
@@ -72,6 +73,11 @@ class MyFrame(wx.Frame):
         self.file_panel = wx.Panel(self.notebook)
         self.notebook.AddPage(self.file_panel, "Selecionar Arquivos")
         self.setup_file_panel()
+
+        # Aba de texto
+        self.text_panel = wx.Panel(self.notebook)
+        self.notebook.AddPage(self.text_panel, "Buscar por Nome")
+        self.setup_text_panel()
 
         # Remover vinculações anteriores
         # self.extension_panel.Bind(wx.EVT_KEY_DOWN, self.on_search_key_down)
@@ -182,7 +188,14 @@ class MyFrame(wx.Frame):
             self.file_search.SetValue("")  # Limpa o texto
             self.filter_files(None)  # Atualiza a lista de arquivos
             self.file_search.SetFocus()  # Retorna o foco
-
+        elif current_page == 2:  # Aba de texto
+            self.text_input.SetFocus()  # Mantém o texto e o foco
+            # Mostrar todos os arquivos novamente
+            self.text_file_list.SetItems(self.all_files)
+            # Manter seleções existentes
+            for i in range(self.text_file_list.GetCount()):
+                file_path = self.text_file_list.GetString(i)
+                self.text_file_list.Check(i, file_path in self.selected_files)
 
     def update_lists(self, event):
         source_directory = self.source_dir_picker.GetPath()
@@ -200,6 +213,8 @@ class MyFrame(wx.Frame):
                 for file in files
             ]
             self.filter_files(None)
+            # Atualizar a lista de arquivos na terceira aba
+            self.text_file_list.SetItems(self.all_files)
 
     def filter_extensions(self, event):
         search_term = self.extension_search.GetValue().lower()
@@ -251,7 +266,7 @@ class MyFrame(wx.Frame):
                 wx.MessageBox("Selecione pelo menos uma extensão.", "Aviso", wx.OK | wx.ICON_WARNING)
                 return
             self.copy_by_extensions(source_directory, output_directory, selected_extensions)
-        elif current_page == 1:
+        elif current_page == 1 or current_page == 2:  # Aba de arquivos ou texto
             selected_files = list(self.selected_files)
             if not selected_files:
                 wx.MessageBox("Selecione pelo menos um arquivo.", "Aviso", wx.OK | wx.ICON_WARNING)
@@ -323,6 +338,8 @@ class MyFrame(wx.Frame):
         self.output_dir_picker.SetPath("")
         self.extension_checklist.Clear()
         self.file_list.Clear()
+        self.text_input.Clear()
+        self.text_file_list.Clear()
         self.output_text.Clear()
         self.all_extensions = []
         self.all_files = []
@@ -354,6 +371,97 @@ class MyFrame(wx.Frame):
             file = self.file_list.GetString(i)
             self.file_list.Check(i, False)
             self.selected_files.discard(file)
+
+    def setup_text_panel(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        # Instruções
+        instructions = wx.StaticText(self.text_panel, label="Digite os nomes dos arquivos (separados por espaço, vírgula ou linha):")
+        sizer.Add(instructions, 0, wx.ALL, 10)
+
+        # Campo de texto para entrada
+        self.text_input = wx.TextCtrl(self.text_panel, style=wx.TE_MULTILINE)
+        sizer.Add(self.text_input, 1, wx.EXPAND | wx.ALL, 10)
+
+        # Botão "Selecionar"
+        select_button = wx.Button(self.text_panel, label="Selecionar")
+        select_button.Bind(wx.EVT_BUTTON, self.on_select_from_text)
+        sizer.Add(select_button, 0, wx.ALL | wx.CENTER, 5)
+
+        # Lista de arquivos (caminhos completos)
+        self.text_file_list = wx.CheckListBox(self.text_panel, choices=[])
+        self.text_file_list.Bind(wx.EVT_CHECKLISTBOX, self.on_text_file_checked)
+        sizer.Add(self.text_file_list, 1, wx.EXPAND | wx.ALL, 10)
+
+        # Botões de Seleção
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        select_all_button = wx.Button(self.text_panel, label="Selecionar Todos")
+        deselect_all_button = wx.Button(self.text_panel, label="Deselecionar Todos")
+        select_all_button.Bind(wx.EVT_BUTTON, self.select_all_text_files)
+        deselect_all_button.Bind(wx.EVT_BUTTON, self.deselect_all_text_files)
+        button_sizer.Add(select_all_button, 1, wx.ALL, 5)
+        button_sizer.Add(deselect_all_button, 1, wx.ALL, 5)
+        sizer.Add(button_sizer, 0, wx.EXPAND)
+
+        self.text_panel.SetSizer(sizer)
+
+    def on_select_from_text(self, event):
+        source_directory = self.source_dir_picker.GetPath()
+        if not source_directory:
+            wx.MessageBox("Selecione o diretório de origem primeiro.", "Erro", wx.OK | wx.ICON_ERROR)
+            return
+
+        input_text = self.text_input.GetValue().strip()
+        if not input_text:
+            # Se o campo estiver vazio, mostrar todos os arquivos
+            self.text_file_list.SetItems(self.all_files)
+            return
+
+        # Processar entradas (separar por espaço, vírgula ou nova linha)
+        entries = [e.strip() for e in re.split(r'[,\s\n]+', input_text) if e.strip()]
+        found_files = set()
+
+        # Buscar arquivos com nomes exatos (case-insensitive)
+        for root, _, files in os.walk(source_directory):
+            for file in files:
+                if file.lower() in [e.lower() for e in entries]:
+                    found_files.add(os.path.join(root, file))
+
+        if found_files:
+            # Atualizar lista com caminhos completos
+            self.text_file_list.SetItems(sorted(found_files))
+            # Marcar arquivos encontrados
+            self.selected_files.clear()
+            for i in range(self.text_file_list.GetCount()):
+                file_path = self.text_file_list.GetString(i)
+                self.text_file_list.Check(i, True)
+                self.selected_files.add(file_path)
+        else:
+            wx.MessageBox("Nenhum arquivo correspondente encontrado.", "Aviso", wx.OK | wx.ICON_WARNING)
+        event.Skip()
+
+    def on_text_file_checked(self, event):
+        index = event.GetInt()
+        file_path = self.text_file_list.GetString(index)
+        if self.text_file_list.IsChecked(index):
+            self.selected_files.add(file_path)
+        else:
+            self.selected_files.discard(file_path)
+        event.Skip()
+
+    def select_all_text_files(self, event):
+        for i in range(self.text_file_list.GetCount()):
+            file_path = self.text_file_list.GetString(i)
+            self.text_file_list.Check(i, True)
+            self.selected_files.add(file_path)
+        event.Skip()
+
+    def deselect_all_text_files(self, event):
+        for i in range(self.text_file_list.GetCount()):
+            file_path = self.text_file_list.GetString(i)
+            self.text_file_list.Check(i, False)
+            self.selected_files.discard(file_path)
+        event.Skip()
 
 if __name__ == "__main__":
     app = MyApp()

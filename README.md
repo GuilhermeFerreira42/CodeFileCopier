@@ -1,80 +1,61 @@
+# Copiador de Arquivos de Código
 
-# Copiar Arquivos de Código com Estrutura de Árvore Binária
-
-## Sobre o Projeto
-Este é um programa em Python com interface gráfica (GUI) desenvolvida em wxPython. O objetivo é copiar recursivamente todos os arquivos de código de um diretório selecionado para um único arquivo de saída, incluindo uma representação da estrutura do diretório em formato de árvore binária.
+Uma aplicação gráfica para copiar arquivos de código com diferentes métodos de seleção.
 
 ## Funcionalidades
-- Interface gráfica intuitiva para selecionar diretórios de origem e saída.
-- Copia arquivos de código com extensões suportadas (como `.py`, `.java`, `.c`, `.cpp`, `.js`, `.html`, `.css`).
-- Gera um arquivo `codigo_completo.txt` com:
-  - O conteúdo dos arquivos de código copiados.
-  - Uma representação hierárquica da estrutura do diretório em formato de árvore binária.
 
-## Tecnologias Utilizadas
-- **Python 3.10+**
-- **wxPython** para criação da interface gráfica
+- Seleção por extensão de arquivo
+- Busca por nome de arquivo
+- Seleção por lista de nomes de arquivos
+- Interface gráfica intuitiva
+- Suporte a múltipla seleção de arquivos
+- Copia em lote para diretório de destino
 
-## Como Usar
+## Requisitos
 
-### 1. Instale as Dependências
-Certifique-se de que o wxPython esteja instalado em seu ambiente Python:
+- Python 3.6 ou superior
+- wxPython 4.2.1
+
+## Instalação
+
+1. Clone este repositório
+2. Instale as dependências:
 ```bash
-pip install wxPython
+pip install -r requirements.txt
 ```
 
-### 2. Execute o Programa
-Salve o código do programa em um arquivo `copiar_codigo.py` e execute-o:
+## Uso
+
+Execute o programa:
 ```bash
-python copiar_codigo.py
+python code_file_copier.py
 ```
 
-### 3. Selecione os Diretórios
-- Escolha o diretório de origem onde estão os arquivos de código.
-- Escolha o diretório de saída onde o arquivo `codigo_completo.txt` será gerado.
+### Abas Disponíveis
 
-### 4. Clique no Botão "Copiar Arquivos"
-O programa irá:
-- Copiar os arquivos de código para o arquivo de saída.
-- Gerar a estrutura de diretórios em formato de árvore binária e adicioná-la ao final do arquivo.
+1. **Por Extensão**
+   - Selecione o diretório de origem
+   - Digite as extensões dos arquivos (separadas por vírgula)
+   - Selecione os arquivos desejados
 
-### 5. Confira a Saída
-O arquivo `codigo_completo.txt` conterá:
-- O conteúdo de todos os arquivos de código encontrados.
-- A representação da árvore binária dos diretórios.
+2. **Por Busca**
+   - Selecione o diretório de origem
+   - Digite o termo de busca
+   - Selecione os arquivos desejados
 
-## Estrutura do Arquivo de Saída
-Exemplo de conteúdo do arquivo `codigo_completo.txt`:
+3. **Por Texto**
+   - Selecione o diretório de origem
+   - Digite os nomes dos arquivos (separados por vírgula ou nova linha)
+   - Clique em "Selecionar"
+   - Selecione os arquivos desejados
 
-```
-Conteúdo de exemplo.py:
-print("Hello, World!")
+### Atalhos
 
-Conteúdo de main.c:
-#include <stdio.h>
-int main() {
-    printf("Hello, World!\n");
-    return 0;
-}
+- **ESC**: Limpa o campo de busca nas abas 1 e 2, ou restaura a lista de arquivos na aba 3
 
-==========================================
-Estrutura de pastas:
-==========================================
-root_directory
-    folder1
-        file1.py
-        file2.java
-    folder2
-        file3.c
-        file4.html
-```
+### Copiando Arquivos
 
-## Observações
-1. Apenas arquivos com extensões suportadas serão incluídos no arquivo de saída.
-2. Certifique-se de ter permissões de leitura nos diretórios de origem e de escrita no diretório de saída.
-
-## Contribuição
-Sinta-se à vontade para contribuir com melhorias ou sugerir novos recursos. 
-
-## Licença
-Este projeto está licenciado sob a Licença MIT.
+1. Selecione os arquivos desejados em qualquer uma das abas
+2. Clique no botão "Copiar Arquivos"
+3. Selecione o diretório de destino
+4. Os arquivos serão copiados para o diretório selecionado
