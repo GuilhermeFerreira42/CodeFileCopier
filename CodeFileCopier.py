@@ -1,8 +1,6 @@
 import wx
 import os
 import re
-# wx.lib.gizmos não é mais necessário para esta abordagem
-# import wx.lib.gizmos as gizmos
 
 class TreeNode:
     """Classe para representar nós da árvore binária (para a saída de texto)."""
@@ -190,8 +188,13 @@ class MyFrame(wx.Frame):
         current_path = self.source_dir_picker.GetPath()
         if current_path and current_path != self.source_dir_last_path:
             self.source_dir_last_path = current_path
-            self.update_file_and_extension_lists()
-            self.populate_file_tree() 
+            # Envolver atualizações de UI em Freeze/Thaw
+            self.Freeze() 
+            try:
+                self.update_file_and_extension_lists()
+                self.populate_file_tree() 
+            finally:
+                self.Thaw()
         if event: 
             event.Skip()
 
@@ -203,6 +206,9 @@ class MyFrame(wx.Frame):
         else:
             extensions = set()
             files_list = []
+            # os.walk pode ser lento para diretórios muito grandes.
+            # Para aplicações muito sensíveis, isso poderia ir para um thread,
+            # mas para este escopo, vamos focar nas atualizações da UI.
             for root, _, files in os.walk(source_directory):
                 for file in files:
                     ext = os.path.splitext(file)[1]
@@ -212,20 +218,30 @@ class MyFrame(wx.Frame):
             self.all_extensions = sorted(list(extensions))
             self.all_files = sorted(files_list)
 
-        self.filter_extensions(None)  
-        self.filter_files(None)       
-        
-        if hasattr(self, 'text_file_list'): 
-            self.text_file_list.SetItems(self.all_files)
-            current_text_selections = {self.text_file_list.GetString(i) for i in self.text_file_list.GetCheckedItems()}
-            self.selected_files.intersection_update(self.all_files) 
-            self.selected_files.update(current_text_selections.intersection(self.all_files))
+        # Congelar o notebook ou painéis individuais antes de múltiplas atualizações de lista
+        # self.notebook.Freeze() # Ou congelar painéis/listas individualmente
+        try:
+            self.filter_extensions(None)  
+            self.filter_files(None)       
             
-            new_checked_indices = []
-            for i, item_path in enumerate(self.all_files):
-                if item_path in self.selected_files:
-                    new_checked_indices.append(i)
-            self.text_file_list.SetCheckedItems(new_checked_indices)
+            if hasattr(self, 'text_file_list'): 
+                self.text_file_list.Freeze()
+                try:
+                    self.text_file_list.SetItems(self.all_files)
+                    current_text_selections = {self.text_file_list.GetString(i) for i in self.text_file_list.GetCheckedItems()}
+                    self.selected_files.intersection_update(self.all_files) 
+                    self.selected_files.update(current_text_selections.intersection(self.all_files))
+                    
+                    new_checked_indices = []
+                    for i, item_path in enumerate(self.all_files):
+                        if item_path in self.selected_files:
+                            new_checked_indices.append(i)
+                    self.text_file_list.SetCheckedItems(new_checked_indices)
+                finally:
+                    self.text_file_list.Thaw()
+        finally:
+            # self.notebook.Thaw()
+            pass # Thaw individual já feito
 
 
     def setup_extension_panel(self):
@@ -349,6 +365,8 @@ class MyFrame(wx.Frame):
                 return "unchecked"
 
             num_selected = 0
+            # Esta parte pode ser lenta se a pasta tiver muitos arquivos.
+            # A verificação de 'in self.selected_files' é O(1) em média para sets.
             for f_path in descendant_files:
                 if f_path in self.selected_files:
                     num_selected += 1
@@ -372,37 +390,58 @@ class MyFrame(wx.Frame):
         elif state == "partial":
             image_index = self.IMG_PARTIAL
         
+        # Evitar chamar SetItemImage se a imagem já for a correta
+        # current_image = self.file_tree.GetItemImage(tree_item) # GetItemImage pode não retornar o que esperamos para comparação direta
+        # if current_image != image_index: # Esta comparação pode não ser confiável
         self.file_tree.SetItemImage(tree_item, image_index)
+
 
     def _update_all_tree_item_images(self, start_node):
         if not start_node.IsOk():
             return
         
-        self._update_tree_item_image(start_node) 
+        self.file_tree.Freeze() # Congelar a árvore antes de múltiplas atualizações de imagem
+        try:
+            self._update_tree_item_image_recursive_worker(start_node)
+        finally:
+            self.file_tree.Thaw()
 
-        child, cookie = self.file_tree.GetFirstChild(start_node)
+    def _update_tree_item_image_recursive_worker(self, current_node):
+        """Trabalhador recursivo para _update_all_tree_item_images."""
+        if not current_node.IsOk():
+            return
+        self._update_tree_item_image(current_node)
+        child, cookie = self.file_tree.GetFirstChild(current_node)
         while child.IsOk():
-            self._update_all_tree_item_images(child) 
-            child, cookie = self.file_tree.GetNextChild(start_node, cookie)
+            self._update_tree_item_image_recursive_worker(child)
+            child, cookie = self.file_tree.GetNextChild(current_node, cookie)
 
 
     def _update_parents_images(self, tree_item):
-        parent = self.file_tree.GetItemParent(tree_item)
-        while parent.IsOk() and parent != self.file_tree.GetRootItem(): 
-            self._update_tree_item_image(parent)
-            parent = self.file_tree.GetItemParent(parent)
+        self.file_tree.Freeze() # Congelar antes de atualizar pais
+        try:
+            parent = self.file_tree.GetItemParent(tree_item)
+            while parent.IsOk() and parent != self.file_tree.GetRootItem(): 
+                self._update_tree_item_image(parent)
+                parent = self.file_tree.GetItemParent(parent)
+        finally:
+            self.file_tree.Thaw()
 
     def populate_file_tree(self):
-        self.file_tree.DeleteAllItems()
-        source_dir = self.source_dir_picker.GetPath()
-        if not source_dir or not os.path.isdir(source_dir):
-            return
-        
-        invisible_root = self.file_tree.AddRoot("DummyRoot") 
-        self._populate_tree_recursive(source_dir, invisible_root, is_top_level=True)
-        
-        self._update_all_tree_item_images(invisible_root)
-        # self.file_tree.Expand(invisible_root) # Removido para corrigir o wxAssertionError
+        self.file_tree.Freeze() # Congelar a árvore antes de grandes modificações
+        try:
+            self.file_tree.DeleteAllItems()
+            source_dir = self.source_dir_picker.GetPath()
+            if not source_dir or not os.path.isdir(source_dir):
+                return
+            
+            invisible_root = self.file_tree.AddRoot("DummyRoot") 
+            self._populate_tree_recursive(source_dir, invisible_root, is_top_level=True)
+            
+            # _update_all_tree_item_images já tem seu próprio Freeze/Thaw
+            self._update_all_tree_item_images(invisible_root)
+        finally:
+            self.file_tree.Thaw()
 
 
     def _populate_tree_recursive(self, parent_os_path, parent_tree_item, is_top_level=False):
@@ -427,32 +466,37 @@ class MyFrame(wx.Frame):
         item_path = self.file_tree.GetItemData(tree_item)
         if not item_path: return
 
-        if os.path.isfile(item_path):
-            if item_path in self.selected_files:
-                self.selected_files.discard(item_path)
-                self.output_text.AppendText(f"Desmarcado (árvore): {os.path.basename(item_path)}\n")
-            else:
-                self.selected_files.add(item_path)
-                self.output_text.AppendText(f"Marcado (árvore): {os.path.basename(item_path)}\n")
-            self._update_tree_item_image(tree_item) 
-            self._update_parents_images(tree_item)  
+        self.file_tree.Freeze() # Congelar antes de múltiplas atualizações
+        try:
+            if os.path.isfile(item_path):
+                if item_path in self.selected_files:
+                    self.selected_files.discard(item_path)
+                    self.output_text.AppendText(f"Desmarcado (árvore): {os.path.basename(item_path)}\n")
+                else:
+                    self.selected_files.add(item_path)
+                    self.output_text.AppendText(f"Marcado (árvore): {os.path.basename(item_path)}\n")
+                self._update_tree_item_image(tree_item) 
+                self._update_parents_images(tree_item)  # _update_parents_images já tem Freeze/Thaw interno
 
-        elif os.path.isdir(item_path):
-            descendant_files = self._get_all_descendant_files_from_os_path(item_path)
-            current_state = self._get_tree_item_state(tree_item) 
+            elif os.path.isdir(item_path):
+                descendant_files = self._get_all_descendant_files_from_os_path(item_path)
+                current_state = self._get_tree_item_state(tree_item) 
 
-            if current_state == "checked": 
-                for f in descendant_files:
-                    if f in self.selected_files:
-                        self.selected_files.discard(f)
-                self.output_text.AppendText(f"Pasta desmarcada (árvore): {os.path.basename(item_path)} e seus conteúdos\n")
-            else: 
-                for f in descendant_files:
-                    self.selected_files.add(f)
-                self.output_text.AppendText(f"Pasta marcada (árvore): {os.path.basename(item_path)} e seus conteúdos\n")
-            
-            self._update_all_tree_item_images(tree_item) 
-            self._update_parents_images(tree_item)
+                if current_state == "checked": 
+                    for f in descendant_files:
+                        if f in self.selected_files:
+                            self.selected_files.discard(f)
+                    self.output_text.AppendText(f"Pasta desmarcada (árvore): {os.path.basename(item_path)} e seus conteúdos\n")
+                else: 
+                    for f in descendant_files:
+                        self.selected_files.add(f)
+                    self.output_text.AppendText(f"Pasta marcada (árvore): {os.path.basename(item_path)} e seus conteúdos\n")
+                
+                # _update_all_tree_item_images já tem Freeze/Thaw interno
+                self._update_all_tree_item_images(tree_item) 
+                self._update_parents_images(tree_item) # _update_parents_images já tem Freeze/Thaw interno
+        finally:
+            self.file_tree.Thaw()
             
         event.Skip()
 
@@ -498,51 +542,72 @@ class MyFrame(wx.Frame):
             self.add_arbitrary_files_to_list(paths)
 
     def add_arbitrary_files_to_list(self, file_paths):
-        added_count = 0
-        for path in file_paths:
-            if path not in self.arbitrary_files_for_union:
-                self.arbitrary_files_for_union.append(path)
-                self.random_files_checklist.Append(path)
-                self.random_files_checklist.Check(self.random_files_checklist.GetCount() - 1)
-                added_count +=1
-        if added_count > 0:
-            self.output_text.AppendText(f"{added_count} arquivo(s) avulso(s) adicionado(s) à lista para união.\n")
+        self.random_files_checklist.Freeze()
+        try:
+            added_count = 0
+            for path in file_paths:
+                if path not in self.arbitrary_files_for_union:
+                    self.arbitrary_files_for_union.append(path)
+                    self.random_files_checklist.Append(path)
+                    self.random_files_checklist.Check(self.random_files_checklist.GetCount() - 1)
+                    added_count +=1
+            if added_count > 0:
+                self.output_text.AppendText(f"{added_count} arquivo(s) avulso(s) adicionado(s) à lista para união.\n")
+        finally:
+            self.random_files_checklist.Thaw()
+
 
     def on_random_file_checklist_toggled(self, event):
         pass 
 
     def on_remove_selected_arbitrary_files(self, event):
         selected_indices = self.random_files_checklist.GetCheckedItems()
-        removed_count = 0
-        for index in sorted(selected_indices, reverse=True):
-            path_to_remove = self.random_files_checklist.GetString(index)
-            if path_to_remove in self.arbitrary_files_for_union:
-                self.arbitrary_files_for_union.remove(path_to_remove)
-            self.random_files_checklist.Delete(index)
-            removed_count += 1
-        if removed_count > 0:
-             self.output_text.AppendText(f"{removed_count} arquivo(s) avulso(s) removido(s) da lista.\n")
+        if not selected_indices: return
+
+        self.random_files_checklist.Freeze()
+        try:
+            removed_count = 0
+            for index in sorted(selected_indices, reverse=True):
+                path_to_remove = self.random_files_checklist.GetString(index)
+                if path_to_remove in self.arbitrary_files_for_union:
+                    self.arbitrary_files_for_union.remove(path_to_remove)
+                self.random_files_checklist.Delete(index)
+                removed_count += 1
+            if removed_count > 0:
+                 self.output_text.AppendText(f"{removed_count} arquivo(s) avulso(s) removido(s) da lista.\n")
+        finally:
+            self.random_files_checklist.Thaw()
+
 
     def on_clear_arbitrary_files_list(self, event):
         self.arbitrary_files_for_union.clear()
-        self.random_files_checklist.Clear()
+        self.random_files_checklist.Freeze()
+        try:
+            self.random_files_checklist.Clear()
+        finally:
+            self.random_files_checklist.Thaw()
         self.output_text.AppendText("Lista de arquivos avulsos limpa.\n")
+
 
     def on_esc_pressed(self, event):
         current_page_idx = self.notebook.GetSelection()
         widget_to_focus = None
         if current_page_idx == 0:  
             self.extension_search.SetValue("")
-            self.filter_extensions(None)
+            self.filter_extensions(None) # filter_extensions já tem Freeze/Thaw
             widget_to_focus = self.extension_search
         elif current_page_idx == 1:  
             self.file_search.SetValue("")
-            self.filter_files(None)
+            self.filter_files(None) # filter_files já tem Freeze/Thaw
             widget_to_focus = self.file_search
         elif current_page_idx == 2:  
-            self.text_file_list.SetItems(self.all_files) 
-            for i, file_path in enumerate(self.all_files):
-                 self.text_file_list.Check(i, file_path in self.selected_files)
+            self.text_file_list.Freeze()
+            try:
+                self.text_file_list.SetItems(self.all_files) 
+                for i, file_path in enumerate(self.all_files):
+                     self.text_file_list.Check(i, file_path in self.selected_files)
+            finally:
+                self.text_file_list.Thaw()
             widget_to_focus = self.text_input 
         elif current_page_idx == 3: 
             widget_to_focus = self.file_tree
@@ -556,12 +621,16 @@ class MyFrame(wx.Frame):
         search_term = self.extension_search.GetValue().lower()
         filtered_extensions = [ext for ext in self.all_extensions if search_term in ext.lower()]
         
-        self.extension_checklist.Set(filtered_extensions)
-        for i, ext in enumerate(filtered_extensions):
-            if ext in self.selected_extensions:
-                self.extension_checklist.Check(i, True)
-            else:
-                self.extension_checklist.Check(i, False)
+        self.extension_checklist.Freeze()
+        try:
+            self.extension_checklist.Set(filtered_extensions)
+            for i, ext in enumerate(filtered_extensions):
+                if ext in self.selected_extensions:
+                    self.extension_checklist.Check(i, True)
+                else:
+                    self.extension_checklist.Check(i, False)
+        finally:
+            self.extension_checklist.Thaw()
 
 
     def filter_files(self, event): 
@@ -580,12 +649,16 @@ class MyFrame(wx.Frame):
                    search_term in os.path.dirname(file).lower() 
             ]
         
-        self.file_list.Set(filtered_files)
-        for i, file_path in enumerate(filtered_files):
-            if file_path in self.selected_files:
-                 self.file_list.Check(i, True)
-            else:
-                self.file_list.Check(i, False)
+        self.file_list.Freeze()
+        try:
+            self.file_list.Set(filtered_files)
+            for i, file_path in enumerate(filtered_files):
+                if file_path in self.selected_files:
+                     self.file_list.Check(i, True)
+                else:
+                    self.file_list.Check(i, False)
+        finally:
+            self.file_list.Thaw()
 
 
     def on_extension_checked(self, event):
@@ -604,20 +677,22 @@ class MyFrame(wx.Frame):
         else:
             self.selected_files.discard(file_path)
         
-        # Sincronizar outras UIs após alteração na aba "Selecionar Arquivos"
-        self.filter_extensions(None) # Apenas para atualizar visual, não altera selected_extensions
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
-        if hasattr(self, 'text_file_list'):
-            # Atualiza a lista da aba "Texto" para refletir self.selected_files
-            # Se a lista da aba texto estiver mostrando resultados de uma busca, ela não deve ser alterada aqui.
-            # Melhor deixar a atualização da text_file_list para quando a aba texto for ativada ou uma busca for feita nela.
-            # No entanto, para consistência imediata, se ela estiver mostrando all_files:
-            # current_text_list_items = self.text_file_list.GetStrings()
-            # if set(current_text_list_items) == set(self.all_files): # Se está mostrando todos, atualiza checks
-            for i, fp_text in enumerate(self.text_file_list.GetStrings()): # Itera sobre o que está visível
-                if fp_text in self.all_files: # Garante que o arquivo ainda é válido
-                     self.text_file_list.Check(i, fp_text in self.selected_files)
+        # Sincronizar outras UIs
+        self.Freeze() # Congela o frame principal para múltiplas atualizações
+        try:
+            self.filter_extensions(None) 
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if hasattr(self, 'text_file_list'):
+                self.text_file_list.Freeze()
+                try:
+                    for i, fp_text in enumerate(self.text_file_list.GetStrings()): 
+                        if fp_text in self.all_files: 
+                             self.text_file_list.Check(i, fp_text in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+        finally:
+            self.Thaw()
 
 
     def on_select_from_text_input(self, event):
@@ -628,79 +703,95 @@ class MyFrame(wx.Frame):
 
         input_text = self.text_input.GetValue().strip()
         
-        if not input_text:
-            self.text_file_list.SetItems(self.all_files) 
-            for i, file_path in enumerate(self.all_files): 
-                self.text_file_list.Check(i, file_path in self.selected_files)
-            return
+        self.Freeze() # Congelar frame para múltiplas atualizações de UI
+        try:
+            if not input_text:
+                self.text_file_list.Freeze()
+                try:
+                    self.text_file_list.SetItems(self.all_files) 
+                    for i, file_path in enumerate(self.all_files): 
+                        self.text_file_list.Check(i, file_path in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+                return
 
-        raw_entries = re.split(r'[,\s\n]+', input_text)
-        search_terms = []
-        for entry in raw_entries:
-            entry = entry.strip()
-            if not entry: continue
-            match = re.match(r'\s*(?:modified:|new file:|deleted:|renamed:)?\s*(?P<filepath>[^\s].*?)(?:\s*->\s*.*)?$', entry)
-            term = match.group('filepath').strip() if match else entry
-            if "->" in term: 
-                term = term.split("->")[-1].strip()
-            search_terms.append(term)
-        
-        if not search_terms: 
-            self.text_file_list.SetItems(self.all_files)
-            for i, file_path in enumerate(self.all_files):
-                self.text_file_list.Check(i, file_path in self.selected_files)
-            return
-
-        found_files_for_this_search = set()
-        for full_path in self.all_files: 
-            basename = os.path.basename(full_path)
-            name_no_ext, _ = os.path.splitext(basename)
+            raw_entries = re.split(r'[,\s\n]+', input_text)
+            search_terms = []
+            for entry in raw_entries:
+                entry = entry.strip()
+                if not entry: continue
+                match = re.match(r'\s*(?:modified:|new file:|deleted:|renamed:)?\s*(?P<filepath>[^\s].*?)(?:\s*->\s*.*)?$', entry)
+                term = match.group('filepath').strip() if match else entry
+                if "->" in term: 
+                    term = term.split("->")[-1].strip()
+                search_terms.append(term)
             
-            try:
-                relative_path_from_source = os.path.relpath(full_path, source_directory).replace("\\", "/")
-            except ValueError: 
-                relative_path_from_source = basename.replace("\\","/") 
+            if not search_terms: 
+                self.text_file_list.Freeze()
+                try:
+                    self.text_file_list.SetItems(self.all_files)
+                    for i, file_path in enumerate(self.all_files):
+                        self.text_file_list.Check(i, file_path in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+                return
 
-            for term in search_terms:
-                term_lower = term.lower()
-                term_as_path_lower = term.replace("\\", "/").lower()
-                normalized_full_path_lower = full_path.replace("\\", "/").lower()
-
-                matched = False
-                if "/" in term or "\\" in term: 
-                    if normalized_full_path_lower.endswith(term_as_path_lower):
-                        matched = True
-                    elif relative_path_from_source.lower() == term_as_path_lower:
-                        matched = True
-                else: 
-                    if term_lower == basename.lower(): 
-                        matched = True
-                    elif term_lower == name_no_ext.lower(): 
-                        matched = True
+            found_files_for_this_search = set()
+            for full_path in self.all_files: 
+                basename = os.path.basename(full_path)
+                name_no_ext, _ = os.path.splitext(basename)
                 
-                if matched:
-                    found_files_for_this_search.add(full_path)
-                    break 
-        
-        self.selected_files.clear() 
+                try:
+                    relative_path_from_source = os.path.relpath(full_path, source_directory).replace("\\", "/")
+                except ValueError: 
+                    relative_path_from_source = basename.replace("\\","/") 
 
-        paths_to_display_in_list = sorted(list(found_files_for_this_search))
-        self.text_file_list.SetItems(paths_to_display_in_list)
+                for term in search_terms:
+                    term_lower = term.lower()
+                    term_as_path_lower = term.replace("\\", "/").lower()
+                    normalized_full_path_lower = full_path.replace("\\", "/").lower()
 
-        for i, file_path_in_list in enumerate(paths_to_display_in_list):
-            self.text_file_list.Check(i, True) 
-            self.selected_files.add(file_path_in_list) 
+                    matched = False
+                    if "/" in term or "\\" in term: 
+                        if normalized_full_path_lower.endswith(term_as_path_lower):
+                            matched = True
+                        elif relative_path_from_source.lower() == term_as_path_lower:
+                            matched = True
+                    else: 
+                        if term_lower == basename.lower(): 
+                            matched = True
+                        elif term_lower == name_no_ext.lower(): 
+                            matched = True
+                    
+                    if matched:
+                        found_files_for_this_search.add(full_path)
+                        break 
+            
+            self.selected_files.clear() 
 
-        if not found_files_for_this_search:
-            wx.MessageBox("Nenhum arquivo correspondente encontrado no diretório de Entrada para os termos fornecidos.", "Aviso", wx.OK | wx.ICON_WARNING)
-        else:
-            self.output_text.AppendText(f"{len(self.selected_files)} arquivo(s) selecionado(s) pela busca por nome.\n")
+            paths_to_display_in_list = sorted(list(found_files_for_this_search))
+            
+            self.text_file_list.Freeze()
+            try:
+                self.text_file_list.SetItems(paths_to_display_in_list)
+                for i, file_path_in_list in enumerate(paths_to_display_in_list):
+                    self.text_file_list.Check(i, True) 
+                    self.selected_files.add(file_path_in_list) 
+            finally:
+                self.text_file_list.Thaw()
 
-        self.filter_extensions(None) 
-        self.filter_files(None)      
-        
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if not found_files_for_this_search:
+                wx.MessageBox("Nenhum arquivo correspondente encontrado no diretório de Entrada para os termos fornecidos.", "Aviso", wx.OK | wx.ICON_WARNING)
+            else:
+                self.output_text.AppendText(f"{len(self.selected_files)} arquivo(s) selecionado(s) pela busca por nome.\n")
+
+            self.filter_extensions(None) 
+            self.filter_files(None)      
+            
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        finally:
+            self.Thaw()
 
 
     def on_text_file_list_checked(self, event): 
@@ -712,10 +803,14 @@ class MyFrame(wx.Frame):
             if file_path in self.selected_files: 
                 self.selected_files.discard(file_path)
         
-        self.filter_extensions(None)
-        self.filter_files(None)
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        self.Freeze()
+        try:
+            self.filter_extensions(None)
+            self.filter_files(None)
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        finally:
+            self.Thaw()
 
 
     def on_copy(self, event):
@@ -734,7 +829,7 @@ class MyFrame(wx.Frame):
 
         current_page_idx = self.notebook.GetSelection()
         page_title = self.notebook.GetPageText(current_page_idx)
-        files_to_process = [] # Lista de arquivos a serem processados pela aba ativa
+        files_to_process = [] 
 
         self.output_text.SetValue(f"Iniciando cópia (aba: {page_title})...\n")
         self.output_text.AppendText(f"Diretório de Saída: {output_directory}\n")
@@ -748,15 +843,13 @@ class MyFrame(wx.Frame):
                 wx.MessageBox("Selecione pelo menos uma extensão.", "Aviso", wx.OK | wx.ICON_WARNING)
                 return
             self.copy_by_extensions(source_directory, output_directory, selected_exts)
-            return # Finaliza após a cópia específica desta aba
+            return 
 
         elif page_title == "Selecionar Arquivos":
             if not source_directory: 
                 wx.MessageBox(f"Selecione o diretório de Entrada para a aba '{page_title}'.", "Erro", wx.OK | wx.ICON_ERROR)
                 return
-            # Obtém arquivos diretamente dos itens marcados na lista desta aba
             files_to_process = [self.file_list.GetString(i) for i in self.file_list.GetCheckedItems()]
-            # Filtra para garantir que os arquivos ainda pertencem ao source_directory atual (segurança)
             files_to_process = [f for f in files_to_process if f.startswith(source_directory)]
             
             if not files_to_process:
@@ -769,7 +862,6 @@ class MyFrame(wx.Frame):
             if not source_directory: 
                 wx.MessageBox(f"Selecione o diretório de Entrada para a aba '{page_title}'.", "Erro", wx.OK | wx.ICON_ERROR)
                 return
-            # Obtém arquivos diretamente dos itens marcados na lista desta aba
             files_to_process = [self.text_file_list.GetString(i) for i in self.text_file_list.GetCheckedItems()]
             files_to_process = [f for f in files_to_process if f.startswith(source_directory)]
 
@@ -783,7 +875,6 @@ class MyFrame(wx.Frame):
             if not source_directory: 
                 wx.MessageBox(f"Selecione o diretório de Entrada para a aba '{page_title}'.", "Erro", wx.OK | wx.ICON_ERROR)
                 return
-            # Para o Explorador, self.selected_files é a fonte da verdade, pois é manipulado pela árvore
             files_to_process = sorted([f for f in list(self.selected_files) if f.startswith(source_directory)])
 
             if not files_to_process:
@@ -826,7 +917,7 @@ class MyFrame(wx.Frame):
                         current_treenode.add_child(child_node)
                         _process_dir_for_extensions(item_path, child_node)
                     elif os.path.splitext(item)[1] in sel_extensions:
-                        self.output_text.AppendText(f"- {item} (de {os.path.relpath(item_path, source_dir)})\n")
+                        # self.output_text.AppendText(f"- {item} (de {os.path.relpath(item_path, source_dir)})\n") # Pode ser lento
                         f_out.write(f"==========================================\n")
                         f_out.write(f"Conteúdo de {os.path.basename(item)} (caminho: {os.path.relpath(item_path, source_dir)}):\n")
                         f_out.write(f"==========================================\n")
@@ -836,8 +927,9 @@ class MyFrame(wx.Frame):
                             current_treenode.add_child(TreeNode(item)) 
                             files_copied_count +=1
                         except Exception as e:
-                            self.output_text.AppendText(f"Erro ao ler {item}: {e}\n")
+                            self.output_text.AppendText(f"Erro ao ler {item}: {e}\n") # Log de erro é importante
                             f_out.write(f"[Erro ao ler arquivo: {e}]\n\n")
+                wx.YieldIfNeeded() # Permite que a UI processe eventos durante loops longos
 
             _process_dir_for_extensions(source_dir, root_node) 
 
@@ -875,7 +967,7 @@ class MyFrame(wx.Frame):
         root_node_for_text_output = TreeNode(root_node_name_for_tree or "Raiz")
 
         with open(output_file_path, "w", encoding="utf-8", errors="ignore") as f_out:
-            for file_path in sel_files_paths:
+            for i, file_path in enumerate(sel_files_paths): # Adicionado i para wx.YieldIfNeeded
                 try:
                     rel_path_for_tree_structure = os.path.relpath(file_path, common_prefix_for_tree)
                 except ValueError: 
@@ -884,8 +976,8 @@ class MyFrame(wx.Frame):
                 parts = rel_path_for_tree_structure.split(os.sep)
                 current_node_for_text = root_node_for_text_output
                 
-                for i, part_name in enumerate(parts):
-                    is_last_part = (i == len(parts) - 1)
+                for idx_part, part_name in enumerate(parts): # Renomeado i para idx_part
+                    is_last_part = (idx_part == len(parts) - 1)
                     found_node = None
                     for child in current_node_for_text.children:
                         if child.name == part_name:
@@ -899,7 +991,7 @@ class MyFrame(wx.Frame):
                         current_node_for_text = new_node
                     
                 path_header_in_txt = os.path.relpath(file_path, source_dir)
-                self.output_text.AppendText(f"- {os.path.basename(file_path)} (de {path_header_in_txt})\n")
+                # self.output_text.AppendText(f"- {os.path.basename(file_path)} (de {path_header_in_txt})\n") # Pode ser lento
                 f_out.write(f"==========================================\n")
                 f_out.write(f"Conteúdo de {os.path.basename(file_path)} (caminho: {path_header_in_txt}):\n")
                 f_out.write(f"==========================================\n")
@@ -910,6 +1002,8 @@ class MyFrame(wx.Frame):
                 except Exception as e:
                     self.output_text.AppendText(f"Erro ao ler {os.path.basename(file_path)}: {e}\n")
                     f_out.write(f"[Erro ao ler arquivo: {e}]\n\n")
+                if i % 10 == 0: # A cada 10 arquivos, por exemplo
+                    wx.YieldIfNeeded()
             
             f_out.write("\n==========================================\n")
             f_out.write("Estrutura de pastas (arquivos selecionados, relativa ao ancestral comum ou Entrada):\n")
@@ -926,8 +1020,8 @@ class MyFrame(wx.Frame):
         files_copied_count = 0
         with open(output_file_path, "w", encoding="utf-8", errors="ignore") as f_out:
             
-            for file_path in arbitrary_file_paths:
-                self.output_text.AppendText(f"- {os.path.basename(file_path)} (de {file_path})\n")
+            for i, file_path in enumerate(arbitrary_file_paths): # Adicionado i
+                # self.output_text.AppendText(f"- {os.path.basename(file_path)} (de {file_path})\n") # Pode ser lento
                 f_out.write(f"==========================================\n")
                 f_out.write(f"Conteúdo de {os.path.basename(file_path)} (caminho original: {file_path}):\n")
                 f_out.write(f"==========================================\n")
@@ -938,6 +1032,8 @@ class MyFrame(wx.Frame):
                 except Exception as e:
                     self.output_text.AppendText(f"Erro ao ler {os.path.basename(file_path)}: {e}\n")
                     f_out.write(f"[Erro ao ler arquivo: {e}]\n\n")
+                if i % 10 == 0:
+                    wx.YieldIfNeeded()
 
             f_out.write("\n==========================================\n")
             f_out.write("Arquivos Avulsos Incluídos (Caminhos Originais):\n")
@@ -953,92 +1049,170 @@ class MyFrame(wx.Frame):
 
 
     def on_clear_all(self, event): 
-        self.source_dir_picker.SetPath("")
-        self.output_dir_picker.SetPath("")
-        self.source_dir_last_path = None
+        self.Freeze()
+        try:
+            self.source_dir_picker.SetPath("")
+            self.output_dir_picker.SetPath("")
+            self.source_dir_last_path = None
 
-        self.all_extensions = []
-        self.all_files = []
-        self.selected_extensions.clear()
-        self.selected_files.clear()
-        self.arbitrary_files_for_union.clear()
+            self.all_extensions = []
+            self.all_files = []
+            self.selected_extensions.clear()
+            self.selected_files.clear()
+            self.arbitrary_files_for_union.clear()
 
-        self.extension_search.SetValue("")
-        self.extension_checklist.Set([]) 
-        self.file_search.SetValue("")
-        self.file_list.Set([])
-        self.text_input.SetValue("")
-        self.text_file_list.Set([])
-        if hasattr(self, 'file_tree'): self.file_tree.DeleteAllItems() 
-        if hasattr(self, 'random_files_checklist'): self.random_files_checklist.Clear()
+            self.extension_search.SetValue("")
+            self.extension_checklist.Freeze()
+            try:
+                self.extension_checklist.Set([]) 
+            finally:
+                self.extension_checklist.Thaw()
+            
+            self.file_search.SetValue("")
+            self.file_list.Freeze()
+            try:
+                self.file_list.Set([])
+            finally:
+                self.file_list.Thaw()
 
-        self.output_text.Clear()
-        self.output_text.AppendText("Todos os campos e seleções foram limpos.\n")
+            self.text_input.SetValue("")
+            self.text_file_list.Freeze()
+            try:
+                self.text_file_list.Set([])
+            finally:
+                self.text_file_list.Thaw()
+
+            if hasattr(self, 'file_tree'): 
+                self.file_tree.Freeze()
+                try:
+                    self.file_tree.DeleteAllItems() 
+                finally:
+                    self.file_tree.Thaw()
+            
+            if hasattr(self, 'random_files_checklist'): 
+                self.random_files_checklist.Freeze()
+                try:
+                    self.random_files_checklist.Clear()
+                finally:
+                    self.random_files_checklist.Thaw()
+
+            self.output_text.Clear()
+            self.output_text.AppendText("Todos os campos e seleções foram limpos.\n")
+        finally:
+            self.Thaw()
 
 
     def select_all_extensions(self, event):
-        self.selected_extensions.clear()
-        for i in range(self.extension_checklist.GetCount()):
-            self.extension_checklist.Check(i, True)
-            self.selected_extensions.add(self.extension_checklist.GetString(i))
+        self.extension_checklist.Freeze()
+        try:
+            self.selected_extensions.clear()
+            for i in range(self.extension_checklist.GetCount()):
+                self.extension_checklist.Check(i, True)
+                self.selected_extensions.add(self.extension_checklist.GetString(i))
+        finally:
+            self.extension_checklist.Thaw()
 
     def deselect_all_extensions(self, event):
-        for i in range(self.extension_checklist.GetCount()):
-            self.extension_checklist.Check(i, False)
-        self.selected_extensions.clear()
+        self.extension_checklist.Freeze()
+        try:
+            for i in range(self.extension_checklist.GetCount()):
+                self.extension_checklist.Check(i, False)
+            self.selected_extensions.clear()
+        finally:
+            self.extension_checklist.Thaw()
 
     def select_all_files_tab(self, event): 
-        self.selected_files.clear()
-        for i in range(self.file_list.GetCount()):
-            self.file_list.Check(i, True)
-            self.selected_files.add(self.file_list.GetString(i))
-        
-        self.filter_extensions(None) 
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
-        if hasattr(self, 'text_file_list'):
-            self.text_file_list.SetItems(self.all_files) 
-            for i, fp in enumerate(self.all_files):
-                self.text_file_list.Check(i, fp in self.selected_files)
+        self.Freeze()
+        try:
+            self.selected_files.clear()
+            self.file_list.Freeze()
+            try:
+                for i in range(self.file_list.GetCount()):
+                    self.file_list.Check(i, True)
+                    self.selected_files.add(self.file_list.GetString(i))
+            finally:
+                self.file_list.Thaw()
+            
+            self.filter_extensions(None) 
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if hasattr(self, 'text_file_list'):
+                self.text_file_list.Freeze()
+                try:
+                    self.text_file_list.SetItems(self.all_files) 
+                    for i, fp in enumerate(self.all_files):
+                        self.text_file_list.Check(i, fp in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+        finally:
+            self.Thaw()
 
 
     def deselect_all_files_tab(self, event): 
-        for i in range(self.file_list.GetCount()):
-            file_path_in_list = self.file_list.GetString(i)
-            self.file_list.Check(i, False)
-            if file_path_in_list in self.selected_files:
-                 self.selected_files.discard(file_path_in_list)
-        
-        self.filter_extensions(None)
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
-        if hasattr(self, 'text_file_list'):
-            self.text_file_list.SetItems(self.all_files)
-            for i, fp in enumerate(self.all_files):
-                self.text_file_list.Check(i, fp in self.selected_files)
+        self.Freeze()
+        try:
+            self.file_list.Freeze()
+            try:
+                for i in range(self.file_list.GetCount()):
+                    file_path_in_list = self.file_list.GetString(i)
+                    self.file_list.Check(i, False)
+                    if file_path_in_list in self.selected_files:
+                         self.selected_files.discard(file_path_in_list)
+            finally:
+                self.file_list.Thaw()
+            
+            self.filter_extensions(None)
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if hasattr(self, 'text_file_list'):
+                self.text_file_list.Freeze()
+                try:
+                    self.text_file_list.SetItems(self.all_files)
+                    for i, fp in enumerate(self.all_files):
+                        self.text_file_list.Check(i, fp in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+        finally:
+            self.Thaw()
 
 
     def select_all_text_files_list(self, event): 
-        for i in range(self.text_file_list.GetCount()):
-            self.text_file_list.Check(i, True)
-            self.selected_files.add(self.text_file_list.GetString(i))
-        
-        self.filter_extensions(None)
-        self.filter_files(None) 
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        self.Freeze()
+        try:
+            self.text_file_list.Freeze()
+            try:
+                for i in range(self.text_file_list.GetCount()):
+                    self.text_file_list.Check(i, True)
+                    self.selected_files.add(self.text_file_list.GetString(i))
+            finally:
+                self.text_file_list.Thaw()
+            
+            self.filter_extensions(None)
+            self.filter_files(None) 
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        finally:
+            self.Thaw()
 
     def deselect_all_text_files_list(self, event): 
-        for i in range(self.text_file_list.GetCount()):
-            file_path_in_list = self.text_file_list.GetString(i)
-            self.text_file_list.Check(i, False)
-            if file_path_in_list in self.selected_files:
-                self.selected_files.discard(file_path_in_list)
-        
-        self.filter_extensions(None)
-        self.filter_files(None)
-        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-            self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        self.Freeze()
+        try:
+            self.text_file_list.Freeze()
+            try:
+                for i in range(self.text_file_list.GetCount()):
+                    file_path_in_list = self.text_file_list.GetString(i)
+                    self.text_file_list.Check(i, False)
+                    if file_path_in_list in self.selected_files:
+                        self.selected_files.discard(file_path_in_list)
+            finally:
+                self.text_file_list.Thaw()
+            
+            self.filter_extensions(None)
+            self.filter_files(None)
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        finally:
+            self.Thaw()
 
 
 if __name__ == "__main__":
