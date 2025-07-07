@@ -2,6 +2,14 @@ import wx
 import os
 import re
 
+# NOVO: Função para a chave de ordenação natural
+def natural_sort_key(s):
+    """
+    Retorna uma chave para ordenação natural (ex: 'item2' antes de 'item10').
+    Converte a string em uma lista de strings e números.
+    """
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
 class TreeNode:
     """Classe para representar nós da árvore binária (para a saída de texto)."""
     def __init__(self, name, full_path=None):
@@ -21,7 +29,9 @@ class TreeNode:
         tree_str = parent_prefix + ("└── " if is_last_child else "├── ") + f"{self.name}\n"
         
         num_children = len(self.children)
-        for i, child in enumerate(self.children):
+        # NOVO: Ordenar os filhos antes de imprimir para garantir a consistência
+        sorted_children = sorted(self.children, key=lambda c: natural_sort_key(c.name))
+        for i, child in enumerate(sorted_children):
             tree_str += child.print_tree(level + 1, i == num_children - 1, prefix)
         return tree_str
     
@@ -57,7 +67,7 @@ class FileListDropTarget(wx.FileDropTarget):
     def OnDropFiles(self, x, y, filenames):
         files_to_add = [f for f in filenames if os.path.isfile(f)]
         if files_to_add:
-            self.add_files_callback(files_to_add)
+             self.add_files_callback(files_to_add)
         return True
 
 class MyApp(wx.App):
@@ -99,6 +109,15 @@ class MyFrame(wx.Frame):
         dir_output_sizer.Add(output_label, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         dir_output_sizer.Add(self.output_dir_picker, 1, wx.ALL | wx.EXPAND, 5)
         self.main_sizer.Add(dir_output_sizer, 0, wx.EXPAND | wx.ALL, 5)
+
+        # NOVO: Sizer para a opção de ordenação
+        sort_option_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sort_label = wx.StaticText(panel, label="Ordem da Cópia:")
+        self.sort_choice = wx.Choice(panel, choices=["Ordenação Natural (Padrão)", "Ordenação Alfabética"])
+        self.sort_choice.SetSelection(0) # Padrão é Natural
+        sort_option_sizer.Add(sort_label, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        sort_option_sizer.Add(self.sort_choice, 1, wx.ALL | wx.EXPAND, 5)
+        self.main_sizer.Add(sort_option_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
         self.source_droptarget = DirectoryDropTarget(self.source_dir_picker, self.on_source_dir_changed)
         self.source_dir_picker.SetDropTarget(self.source_droptarget)
@@ -145,7 +164,7 @@ class MyFrame(wx.Frame):
         self.main_sizer.Add(self.output_text, 1, wx.ALL | wx.EXPAND, 5)
 
         panel.SetSizer(self.main_sizer)
-        self.SetSize((700, 750))
+        self.SetSize((700, 730)) # Aumentei um pouco a altura para a nova opção
 
         self.all_extensions = []
         self.all_files = [] 
@@ -153,6 +172,14 @@ class MyFrame(wx.Frame):
         self.selected_files = set() 
         self.arbitrary_files_for_union = [] 
         self.source_dir_last_path = None
+
+    # NOVO: Função helper para obter a chave de ordenação selecionada
+    def get_sort_key(self):
+        selection = self.sort_choice.GetSelection()
+        if selection == 0: # Natural
+            return natural_sort_key
+        else: # Alfabética
+            return None # Usa a ordenação padrão de strings
 
     def _create_checkbox_bitmap(self, checked_state):
         """Cria um bitmap 16x16 para simular um checkbox.
@@ -216,7 +243,10 @@ class MyFrame(wx.Frame):
                         extensions.add(ext)
                     files_list.append(os.path.join(root, file))
             self.all_extensions = sorted(list(extensions))
-            self.all_files = sorted(files_list)
+            # ALTERAÇÃO: Usar a função de ordenação para a lista de arquivos
+            sort_key_func = self.get_sort_key()
+            self.all_files = sorted(files_list, key=sort_key_func)
+
 
         # Congelar o notebook ou painéis individuais antes de múltiplas atualizações de lista
         # self.notebook.Freeze() # Ou congelar painéis/listas individualmente
@@ -446,7 +476,9 @@ class MyFrame(wx.Frame):
 
     def _populate_tree_recursive(self, parent_os_path, parent_tree_item, is_top_level=False):
         try:
-            items_in_os = sorted(os.listdir(parent_os_path))
+            # ALTERAÇÃO: Usar a função de ordenação ao listar os itens do diretório
+            sort_key_func = self.get_sort_key()
+            items_in_os = sorted(os.listdir(parent_os_path), key=sort_key_func)
         except OSError:
             return 
 
@@ -548,9 +580,16 @@ class MyFrame(wx.Frame):
             for path in file_paths:
                 if path not in self.arbitrary_files_for_union:
                     self.arbitrary_files_for_union.append(path)
-                    self.random_files_checklist.Append(path)
-                    self.random_files_checklist.Check(self.random_files_checklist.GetCount() - 1)
                     added_count +=1
+            
+            # ALTERAÇÃO: Ordenar a lista completa antes de adicioná-la à UI
+            sort_key_func = self.get_sort_key()
+            self.arbitrary_files_for_union.sort(key=sort_key_func)
+            self.random_files_checklist.Set(self.arbitrary_files_for_union)
+            # Marcar todos como checados
+            for i in range(self.random_files_checklist.GetCount()):
+                self.random_files_checklist.Check(i)
+
             if added_count > 0:
                 self.output_text.AppendText(f"{added_count} arquivo(s) avulso(s) adicionado(s) à lista para união.\n")
         finally:
@@ -567,6 +606,7 @@ class MyFrame(wx.Frame):
         self.random_files_checklist.Freeze()
         try:
             removed_count = 0
+            # Ordenar índices em reverso para evitar problemas ao deletar
             for index in sorted(selected_indices, reverse=True):
                 path_to_remove = self.random_files_checklist.GetString(index)
                 if path_to_remove in self.arbitrary_files_for_union:
@@ -769,7 +809,9 @@ class MyFrame(wx.Frame):
             
             self.selected_files.clear() 
 
-            paths_to_display_in_list = sorted(list(found_files_for_this_search))
+            # ALTERAÇÃO: Ordenar a lista encontrada antes de exibir
+            sort_key_func = self.get_sort_key()
+            paths_to_display_in_list = sorted(list(found_files_for_this_search), key=sort_key_func)
             
             self.text_file_list.Freeze()
             try:
@@ -789,7 +831,7 @@ class MyFrame(wx.Frame):
             self.filter_files(None)      
             
             if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+                 self._update_all_tree_item_images(self.file_tree.GetRootItem())
         finally:
             self.Thaw()
 
@@ -875,7 +917,10 @@ class MyFrame(wx.Frame):
             if not source_directory: 
                 wx.MessageBox(f"Selecione o diretório de Entrada para a aba '{page_title}'.", "Erro", wx.OK | wx.ICON_ERROR)
                 return
-            files_to_process = sorted([f for f in list(self.selected_files) if f.startswith(source_directory)])
+            # ALTERAÇÃO: Ordenar a lista final de arquivos selecionados antes de copiar
+            sort_key_func = self.get_sort_key()
+            files_to_process = sorted([f for f in list(self.selected_files) if f.startswith(source_directory)], key=sort_key_func)
+
 
             if not files_to_process:
                 wx.MessageBox("Nenhum arquivo selecionado na aba 'Explorador de Arquivos' para copiar.", "Aviso", wx.OK | wx.ICON_WARNING)
@@ -899,13 +944,16 @@ class MyFrame(wx.Frame):
         output_file_path = os.path.join(output_dir, "codigo_completo.txt")
         self.output_text.AppendText(f"Copiando arquivos de: {source_dir} com extensões: {sel_extensions}\n")
         files_copied_count = 0
+        sort_key_func = self.get_sort_key() # NOVO: Obter a função de ordenação
+
         with open(output_file_path, "w", encoding="utf-8", errors="ignore") as f_out:
             root_node = TreeNode(os.path.basename(source_dir) or source_dir)
             
             def _process_dir_for_extensions(current_dir, current_treenode):
                 nonlocal files_copied_count
                 try:
-                    items_in_dir = sorted(os.listdir(current_dir))
+                    # ALTERAÇÃO: Usar a função de ordenação ao listar o diretório
+                    items_in_dir = sorted(os.listdir(current_dir), key=sort_key_func)
                 except OSError as e:
                     self.output_text.AppendText(f"Erro ao listar diretório {current_dir}: {e}\n")
                     return
@@ -950,6 +998,11 @@ class MyFrame(wx.Frame):
         self.output_text.AppendText(f"Copiando {len(sel_files_paths)} arquivo(s) selecionado(s) de: {source_dir}\n")
         files_copied_count = 0
         
+        # ALTERAÇÃO: Garantir que a lista de arquivos esteja ordenada antes de processar.
+        # A lista já deve vir ordenada da chamada em `on_copy`, mas garantimos aqui.
+        sort_key_func = self.get_sort_key()
+        sel_files_paths.sort(key=sort_key_func)
+
         if not sel_files_paths: 
              common_prefix_for_tree = source_dir
         else:
@@ -1018,6 +1071,11 @@ class MyFrame(wx.Frame):
         output_file_path = os.path.join(output_dir, "codigo_completo.txt")
         self.output_text.AppendText(f"Unindo {len(arbitrary_file_paths)} arquivo(s) avulso(s)...\n")
         files_copied_count = 0
+
+        # ALTERAÇÃO: Ordenar a lista de arquivos avulsos antes de processar
+        sort_key_func = self.get_sort_key()
+        arbitrary_file_paths.sort(key=sort_key_func)
+
         with open(output_file_path, "w", encoding="utf-8", errors="ignore") as f_out:
             
             for i, file_path in enumerate(arbitrary_file_paths): # Adicionado i
@@ -1135,13 +1193,13 @@ class MyFrame(wx.Frame):
             
             self.filter_extensions(None) 
             if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
-                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+                 self._update_all_tree_item_images(self.file_tree.GetRootItem())
             if hasattr(self, 'text_file_list'):
                 self.text_file_list.Freeze()
                 try:
                     self.text_file_list.SetItems(self.all_files) 
                     for i, fp in enumerate(self.all_files):
-                        self.text_file_list.Check(i, fp in self.selected_files)
+                         self.text_file_list.Check(i, fp in self.selected_files)
                 finally:
                     self.text_file_list.Thaw()
         finally:
