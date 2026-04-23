@@ -1,0 +1,363 @@
+# 📋 CARTA DE INSTRUÇÕES PARA IA EXECUTORA
+## Correções e Melhorias - Copiador de Código Avançado (CodeFileCopier.py)
+
+**Data:** $(date)  
+**Arquivo-alvo:** `CodeFileCopier.py`  
+**Objetivo:** Aplicar correções críticas e melhorias de UX na aba "Conformidade .gitignore" + implementar contador de seleção em tempo real.
+
+---
+
+## 🎯 RESUMO DAS TAREFAS
+
+| Prioridade | Item | Status | Descrição Breve |
+|------------|------|--------|----------------|
+| 🔴 CRÍTICO | Campo de input pequeno | ❌ Pendente | Aumentar largura do `wx.TextCtrl` para regras manuais |
+| 🔴 CRÍTICO | Regras manuais não funcionam | ❌ Pendente | `GitignoreParser` não reconstrói `pathspec` ao adicionar regra |
+| 🔴 CRÍTICO | Contador de seleção sempre zero | ❌ Pendente | Label de seleção não é atualizado em tempo real |
+| 🟢 MELHORIA | Enter para adicionar regra | ❌ Pendente | Permitir `Enter` como atalho para "+ Adicionar Regra" |
+| 🟢 MELHORIA | Preview auto-atualiza | ❌ Pendente | Atualizar preview automaticamente ao adicionar/remover regra |
+| 🟢 MELHORIA | Tooltips informativos | ❌ Pendente | Adicionar dicas de uso nos campos da aba .gitignore |
+
+---
+
+## 🔧 INSTRUÇÕES TÉCNICAS DETALHADAS
+
+### 1️⃣ AUMENTAR CAMPO DE INPUT DE REGRAS MANUAIS
+**Local:** Método `setup_gitignore_panel()`, dentro da classe `MyFrame`
+
+**Código atual:**
+```python
+self.gitignore_rule_input = wx.TextCtrl(left_panel)
+```
+
+**Substituir por:**
+```python
+self.gitignore_rule_input = wx.TextCtrl(
+    left_panel, 
+    style=wx.TE_PROCESS_ENTER  # Habilita evento de Enter
+)
+self.gitignore_rule_input.SetMinSize((250, -1))  # ← AUMENTA LARGURA MÍNIMA
+self.gitignore_rule_input.SetToolTip(
+    "Digite uma regra do .gitignore (ex: *.log, temp/, !important.txt) e pressione Enter"
+)
+self.gitignore_rule_input.Bind(wx.EVT_TEXT_ENTER, self._on_add_gitignore_rule)  # Enter adiciona
+```
+
+---
+
+### 2️⃣ FAZER REGRAS MANUAIS FUNCIONAREM NO `GitignoreParser`
+**Local:** Classe `GitignoreParser` (substituir a classe inteira)
+
+**Problema:** Ao adicionar uma regra manual via UI, ela é adicionada à lista `self.rules`, mas o objeto `self.spec` (pathspec) **não é reconstruído**, então a regra nova não é considerada no método `is_ignored()`.
+
+**Solução:** Reconstruir o parser completo sempre que uma regra manual for adicionada/removida.
+
+**Substitua a classe `GitignoreParser` por esta versão corrigida:**
+
+```python
+class GitignoreParser:
+    """
+    Parser robusto de regras .gitignore.
+    Suporta: comentários, negações (!), curingas (*, ?, [a-z]),
+    diretórios (/), recursividade (**).
+    Usa pathspec se disponível, caso contrário implementação própria.
+    """
+
+    def __init__(self, gitignore_path, root_dir, manual_rules=None):
+        self.gitignore_path = gitignore_path
+        self.root_dir = root_dir
+        self.manual_rules = manual_rules or []  # ← Guarda regras manuais separadamente
+        self.rules = []          # lista de (negated, pattern_str)
+        self.spec = None         # pathspec.PathSpec se disponível
+        self._parse()            # ← Parseia TUDO (arquivo + manuais)
+
+    def _parse(self):
+        """Lê e parseia o arquivo .gitignore + regras manuais."""
+        # Lê regras do arquivo .gitignore
+        if os.path.isfile(self.gitignore_path):
+            try:
+                with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
+                    file_lines = [l.rstrip('\n').rstrip('\r') for l in f.readlines()]
+                file_patterns = [l for l in file_lines if l.strip() and not l.strip().startswith('#')]
+            except OSError:
+                file_patterns = []
+        else:
+            file_patterns = []
+
+        # Combina regras do arquivo + manuais
+        all_patterns = file_patterns + self.manual_rules
+
+        # Parseia todas as regras para a lista interna
+        self.rules = []
+        for line in all_patterns:
+            negated = line.startswith('!')
+            pattern = line[1:] if negated else line
+            self.rules.append((negated, pattern.strip()))
+
+        # Reconstrói o pathspec COM TODAS as regras (arquivo + manuais)
+        if HAS_PATHSPEC and all_patterns:
+            try:
+                self.spec = pathspec.PathSpec.from_lines('gitwildmatch', all_patterns)
+            except Exception:
+                self.spec = None
+
+    def is_ignored(self, rel_path):
+        """Verifica se um caminho relativo deve ser ignorado."""
+        rel_path = rel_path.replace(os.sep, '/')
+
+        # Usa pathspec se disponível (AGORA inclui regras manuais!)
+        if HAS_PATHSPEC and self.spec:
+            return self.spec.match_file(rel_path)
+
+        # Fallback com fnmatch
+        ignored = False
+        for negated, pattern in self.rules:
+            p = pattern.lstrip('/')
+            matched = False
+            if '/' in p.replace('**/', ''):
+                matched = fnmatch.fnmatch(rel_path, p) or fnmatch.fnmatch(rel_path, f"**/{p}")
+            else:
+                basename = rel_path.split('/')[-1]
+                matched = fnmatch.fnmatch(basename, p) or fnmatch.fnmatch(rel_path, f"**/{p}")
+            if matched:
+                ignored = not negated
+        return ignored
+
+    def get_rules_list(self):
+        """Retorna lista de strings para exibição na UI."""
+        if os.path.isfile(self.gitignore_path):
+            try:
+                with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
+                    base_rules = [l.rstrip() for l in f.readlines()]
+            except OSError:
+                base_rules = []
+        else:
+            base_rules = []
+        # Retorna regras do arquivo + manuais identificadas
+        return base_rules + [f"[manual] {r}" for r in self.manual_rules]
+
+    def add_manual_rule(self, rule):
+        """Adiciona regra manual e RECONSTRÓI o parser."""
+        if rule and rule not in self.manual_rules:
+            self.manual_rules.append(rule)
+            self._parse()  # ← RECONSTRÓI TUDO, incluindo pathspec!
+            return True
+        return False
+
+    def remove_manual_rule(self, rule):
+        """Remove regra manual e RECONSTRÓI o parser."""
+        if rule in self.manual_rules:
+            self.manual_rules.remove(rule)
+            self._parse()  # ← RECONSTRÓI TUDO
+            return True
+        return False
+```
+
+---
+
+### 3️⃣ CORRIGIR MÉTODOS DE UI QUE USAM O PARSER
+**Local:** Métodos `_on_add_gitignore_rule()` e `_on_remove_gitignore_rule()` na classe `MyFrame`
+
+**Substitua `_on_add_gitignore_rule`:**
+```python
+def _on_add_gitignore_rule(self, event):
+    """Adiciona uma regra manual ao parser."""
+    rule = self.gitignore_rule_input.GetValue().strip()
+    if not rule:
+        return
+    
+    source_dir = self.source_dir_picker.GetPath()
+    if not source_dir or not self._gitignore_parser:
+        wx.MessageBox("Selecione o diretório de entrada primeiro.", "Aviso",
+                     wx.OK | wx.ICON_WARNING)
+        return
+    
+    if self._gitignore_parser.add_manual_rule(rule):  # ← Usa método que reconstrói parser
+        self._gitignore_manual_rules.append(rule)
+        self.gitignore_rule_input.SetValue("")
+        self._refresh_gitignore_status(source_dir)
+        self.output_text.AppendText(f"✓ Regra manual adicionada: {rule}\n")
+        self._on_refresh_gitignore_preview(None)  # ← Atualiza preview automaticamente
+    else:
+        wx.MessageBox("Regra já existe ou é inválida.", "Aviso", wx.OK | wx.ICON_INFORMATION)
+```
+
+**Substitua `_on_remove_gitignore_rule`:**
+```python
+def _on_remove_gitignore_rule(self, event):
+    """Remove a regra selecionada da lista."""
+    idx = self.gitignore_rules_list.GetSelection()
+    if idx == wx.NOT_FOUND:
+        return
+    
+    rule_str = self.gitignore_rules_list.GetString(idx)
+    source_dir = self.source_dir_picker.GetPath()
+    
+    if rule_str.startswith("[manual] "):
+        manual_rule = rule_str[9:]
+        if self._gitignore_parser and self._gitignore_parser.remove_manual_rule(manual_rule):
+            if manual_rule in self._gitignore_manual_rules:
+                self._gitignore_manual_rules.remove(manual_rule)
+            self._refresh_gitignore_status(source_dir)
+            self._on_refresh_gitignore_preview(None)  # ← Atualiza preview automaticamente
+            self.output_text.AppendText(f"✓ Regra manual removida: {manual_rule}\n")
+        else:
+            wx.MessageBox("Erro ao remover regra.", "Erro", wx.OK | wx.ICON_ERROR)
+    else:
+        wx.MessageBox("Apenas regras manuais podem ser removidas aqui.\n"
+                     "Edite o arquivo .gitignore para alterar as regras originais.",
+                     "Info", wx.OK | wx.ICON_INFORMATION)
+```
+
+---
+
+### 4️⃣ IMPLEMENTAR CONTADOR DE SELEÇÃO EM TEMPO REAL
+**Problema:** O label que deveria mostrar "X arquivo(s) selecionado(s) | ~Y linha(s)" sempre permanece em zero.
+
+#### Passo A: Adicionar o Label na UI
+No método `__init__` da classe `MyFrame`, **após** a criação do `output_text`, adicione:
+
+```python
+# --- Label de Contador de Seleção (NOVO) ---
+self.selection_label = wx.StaticText(
+    panel, 
+    label="0 arquivo(s) selecionado(s) | ~0 linha(s) estimadas",
+    style=wx.ALIGN_LEFT
+)
+self.selection_label.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, 
+                                       wx.FONTSTYLE_NORMAL, 
+                                       wx.FONTWEIGHT_BOLD))
+self.selection_label.SetForegroundColour(wx.Colour(0, 100, 0))  # Verde escuro
+self.main_sizer.Add(self.selection_label, 0, wx.ALL | wx.EXPAND, 5)
+```
+
+#### Passo B: Criar o Método de Atualização
+Adicione este método na classe `MyFrame`:
+
+```python
+def _update_selection_counter(self):
+    """
+    Atualiza o contador de arquivos selecionados e estimativa de linhas.
+    Chamado sempre que a seleção muda.
+    """
+    total_files = len(self.selected_files)
+    
+    # Estimativa de linhas: conta linhas reais dos arquivos selecionados
+    total_lines = 0
+    for filepath in self.selected_files:
+        try:
+            if os.path.isfile(filepath):
+                with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                    total_lines += sum(1 for _ in f)
+        except:
+            pass  # Se não conseguir ler, ignora
+    
+    # Atualiza o label
+    label_text = f"{total_files} arquivo(s) selecionado(s) | ~{total_lines:,} linha(s) estimadas"
+    wx.CallAfter(self.selection_label.SetLabel, label_text)
+    
+    # Atualiza também na title bar (opcional)
+    wx.CallAfter(self.SetTitle, f"Copiador de Código - {total_files} arquivo(s) selecionado(s)")
+```
+
+#### Passo C: Chamar o Método em Todos os Pontos de Mudança de Seleção
+Adicione `self._update_selection_counter()` no **final** dos seguintes métodos:
+
+| Método | Localização da chamada |
+|--------|----------------------|
+| `on_file_checked` | Após o bloco `finally: self.Thaw()` |
+| `on_text_file_list_checked` | Após o bloco `finally: self.Thaw()` |
+| `on_tree_item_checkbox_activated` | Após `event.Skip()` |
+| `select_all_files_tab` | Após o bloco `finally: self.Thaw()` |
+| `deselect_all_files_tab` | Após o bloco `finally: self.Thaw()` |
+| `select_all_text_files_list` | Após o bloco `finally: self.Thaw()` |
+| `deselect_all_text_files_list` | Após o bloco `finally: self.Thaw()` |
+| `on_select_from_text_input` | Após o bloco `finally: self.Thaw()` |
+| `on_clear_all` | Após o bloco `finally: self.Thaw()` |
+
+**Exemplo de aplicação em `on_file_checked`:**
+```python
+def on_file_checked(self, event):
+    index = event.GetInt()
+    file_path = self.file_list.GetString(index)
+    if self.file_list.IsChecked(index):
+        self.selected_files.add(file_path)
+    else:
+        self.selected_files.discard(file_path)
+    
+    # Sincronizar outras UIs...
+    self.Freeze()
+    try:
+        self.filter_extensions(None)
+        if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+            self._update_all_tree_item_images(self.file_tree.GetRootItem())
+        if hasattr(self, 'text_file_list'):
+            self.text_file_list.Freeze()
+            try:
+                for i, fp_text in enumerate(self.text_file_list.GetStrings()):
+                    if fp_text in self.all_files:
+                        self.text_file_list.Check(i, fp_text in self.selected_files)
+            finally:
+                self.text_file_list.Thaw()
+    finally:
+        self.Thaw()
+    
+    # ← NOVO: Atualizar contador
+    self._update_selection_counter()
+```
+
+---
+
+### 5️⃣ MELHORIAS DE UX (OPCIONAIS MAS RECOMENDADAS)
+
+#### Tooltip no checkbox de padrões globais
+**Local:** No `__init__`, onde é criado `self.ignore_patterns_cb`:
+```python
+self.ignore_patterns_cb = wx.CheckBox(panel, label="Aplicar padrões de exclusão globais")
+self.ignore_patterns_cb.SetValue(True)
+self.ignore_patterns_cb.SetToolTip(
+    "Ignora automaticamente: .git, __pycache__, node_modules, venv, *.log, *.pyc, etc.\n"
+    "Desmarque para copiar TUDO, incluindo arquivos de build e dependências."
+)
+```
+
+#### Tooltip no campo de regras do .gitignore
+Já incluído na correção #1 acima.
+
+#### Status bar informativa
+No método `_on_refresh_gitignore_preview`, após atualizar a lista:
+```python
+self.SetStatusText(f"Preview: {len(items)} item(s) listados", 0)
+```
+
+---
+
+## ✅ CHECKLIST DE VALIDAÇÃO FINAL
+
+Após aplicar as correções, teste:
+
+- [ ] Campo de input de regras manuais tem largura adequada (~250px) e aceita `Enter`
+- [ ] Ao adicionar regra manual (ex: `*.tmp`), o preview mostra arquivos `.tmp` como 🚫 ignorados
+- [ ] Ao remover regra manual, o preview atualiza e arquivos voltam a aparecer como ✅
+- [ ] Label de seleção mostra contagem correta ao marcar/desmarcar arquivos em qualquer aba
+- [ ] Contador atualiza em tempo real (não só após a cópia)
+- [ ] Tooltips aparecem ao passar o mouse sobre campos relevantes
+- [ ] Nenhuma funcionalidade existente foi quebrada (regressão)
+
+---
+
+## 📦 ENTREGÁVEL ESPERADO
+
+- **Um único arquivo** `CodeFileCopier.py` funcional, com todas as correções aplicadas
+- **Código comentado** nas seções modificadas (ex: `# CORREÇÃO: ...`)
+- **Compatibilidade mantida** com Python 3.8+ e wxPython 4.2+
+- **Sem novas dependências** obrigatórias (pathspec continua opcional)
+
+---
+
+> 💡 **Instrução final para a IA:**  
+> *"Implemente todas as correções listadas acima mantendo a estrutura original do código. Entregue o arquivo completo integrado, garantindo que nenhuma funcionalidade existente seja quebrada. Use `wx.CallAfter` para todas as atualizações de UI originadas fora da thread principal. Comente as seções modificadas para facilitar auditoria."*
+
+---
+
+**Pronto para copiar e colar para a IA executora.** 🚀
