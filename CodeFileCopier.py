@@ -19,6 +19,7 @@
 # - Botões reorganizados horizontalmente
 
 import wx
+import wx.html
 import os
 import re
 import threading
@@ -186,80 +187,94 @@ class GitignoreParser:
     Usa pathspec se disponível, caso contrário implementação própria.
     """
 
-    def __init__(self, gitignore_path, root_dir):
+    def __init__(self, gitignore_path, root_dir, manual_rules=None):
         self.gitignore_path = gitignore_path
         self.root_dir = root_dir
-        self.rules = []          # lista de (negated, pattern_str) para fallback
+        self.manual_rules = manual_rules or []  # ← Guarda regras manuais separadamente
+        self.rules = []          # lista de (negated, pattern_str)
         self.spec = None         # pathspec.PathSpec se disponível
-        self._parse()
+        self._parse()            # ← Parseia TUDO (arquivo + manuais)
 
     def _parse(self):
-        """Lê e parseia o arquivo .gitignore."""
-        if not os.path.isfile(self.gitignore_path):
-            return
+        """Lê e parseia o arquivo .gitignore + regras manuais."""
+        # Lê regras do arquivo .gitignore
+        if os.path.isfile(self.gitignore_path):
+            try:
+                with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
+                    file_lines = [l.rstrip('\n').rstrip('\r') for l in f.readlines()]
+                file_patterns = [l for l in file_lines if l.strip() and not l.strip().startswith('#')]
+            except OSError:
+                file_patterns = []
+        else:
+            file_patterns = []
 
-        try:
-            with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
-        except OSError:
-            return
+        # Combina regras do arquivo + manuais
+        all_patterns = file_patterns + self.manual_rules
 
-        patterns = []
-        for line in lines:
-            line = line.rstrip('\n').rstrip('\r')
-            # Ignorar comentários e linhas vazias
-            if not line.strip() or line.strip().startswith('#'):
-                continue
-            patterns.append(line)
+        # Parseia todas as regras para a lista interna
+        self.rules = []
+        for line in all_patterns:
             negated = line.startswith('!')
             pattern = line[1:] if negated else line
             self.rules.append((negated, pattern.strip()))
 
-        if HAS_PATHSPEC:
+        # Reconstrói o pathspec COM TODAS as regras (arquivo + manuais)
+        if HAS_PATHSPEC and all_patterns:
             try:
-                self.spec = pathspec.PathSpec.from_lines('gitwildmatch', patterns)
+                self.spec = pathspec.PathSpec.from_lines('gitwildmatch', all_patterns)
             except Exception:
                 self.spec = None
 
     def is_ignored(self, rel_path):
-        """
-        Verifica se um caminho relativo à raiz deve ser ignorado.
-        rel_path deve usar separadores '/' (Unix-style).
-        """
+        """Verifica se um caminho relativo deve ser ignorado."""
         rel_path = rel_path.replace(os.sep, '/')
 
+        # Usa pathspec se disponível (AGORA inclui regras manuais!)
         if HAS_PATHSPEC and self.spec:
             return self.spec.match_file(rel_path)
 
-        # Implementação própria com fnmatch
+        # Fallback com fnmatch
         ignored = False
         for negated, pattern in self.rules:
-            # Normalizar pattern
             p = pattern.lstrip('/')
             matched = False
-
             if '/' in p.replace('**/', ''):
-                # Pattern com diretório: match no caminho completo
                 matched = fnmatch.fnmatch(rel_path, p) or fnmatch.fnmatch(rel_path, f"**/{p}")
             else:
-                # Pattern simples: match no nome do arquivo ou qualquer parte do caminho
                 basename = rel_path.split('/')[-1]
                 matched = fnmatch.fnmatch(basename, p) or fnmatch.fnmatch(rel_path, f"**/{p}")
-
             if matched:
                 ignored = not negated
-
         return ignored
 
     def get_rules_list(self):
-        """Retorna lista de strings das regras para exibição."""
-        if not os.path.isfile(self.gitignore_path):
-            return []
-        try:
-            with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
-                return [l.rstrip() for l in f.readlines()]
-        except OSError:
-            return []
+        """Retorna lista de strings para exibição na UI."""
+        if os.path.isfile(self.gitignore_path):
+            try:
+                with open(self.gitignore_path, "r", encoding="utf-8", errors="ignore") as f:
+                    base_rules = [l.rstrip() for l in f.readlines()]
+            except OSError:
+                base_rules = []
+        else:
+            base_rules = []
+        # Retorna regras do arquivo + manuais identificadas
+        return base_rules + [f"[manual] {r}" for r in self.manual_rules]
+
+    def add_manual_rule(self, rule):
+        """Adiciona regra manual e RECONSTRÓI o parser."""
+        if rule and rule not in self.manual_rules:
+            self.manual_rules.append(rule)
+            self._parse()  # ← RECONSTRÓI TUDO, incluindo pathspec!
+            return True
+        return False
+
+    def remove_manual_rule(self, rule):
+        """Remove regra manual e RECONSTRÓI o parser."""
+        if rule in self.manual_rules:
+            self.manual_rules.remove(rule)
+            self._parse()  # ← RECONSTRÓI TUDO
+            return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -358,7 +373,9 @@ class MyFrame(wx.Frame):
         self.ignore_patterns_cb = wx.CheckBox(panel, label="Aplicar padrões de exclusão globais")
         self.ignore_patterns_cb.SetValue(True)
         self.ignore_patterns_cb.SetToolTip(
-            "Exclui: " + ", ".join(IGNORE_PATTERNS[:8]) + "...")
+            "Ignora automaticamente: .git, __pycache__, node_modules, venv, *.log, *.pyc, etc.\n"
+            "Desmarque para copiar TUDO, incluindo arquivos de build e dependências."
+        )
         opts_sizer.Add(self.ignore_patterns_cb, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         self.main_sizer.Add(opts_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -396,13 +413,21 @@ class MyFrame(wx.Frame):
         self.notebook.AddPage(self.gitignore_panel, "Conformidade .gitignore")
         self.setup_gitignore_panel()
 
-        # --- Contador de seleção ---
+        # --- Label de Contador de Seleção (MELHORADO) ---
         self.selection_label = wx.StaticText(
-            panel, label="0 arquivos selecionados | ~0 linhas estimadas")
-        font_mono = wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL,
-                            wx.FONTWEIGHT_NORMAL)
-        self.selection_label.SetFont(font_mono)
+            panel, 
+            label="0 arquivo(s) selecionado(s) | ~0 linha(s) estimadas",
+            style=wx.ALIGN_LEFT
+        )
+        self.selection_label.SetFont(wx.Font(9, wx.FONTFAMILY_TELETYPE, 
+                                               wx.FONTSTYLE_NORMAL, 
+                                               wx.FONTWEIGHT_BOLD))
+        self.selection_label.SetForegroundColour(wx.Colour(0, 100, 0))  # Verde escuro
         self.main_sizer.Add(self.selection_label, 0, wx.ALL | wx.EXPAND, 5)
+
+        # --- Fontes ---
+        font_mono = wx.Font(9, wx.FONTFAMILY_TELETYPE, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
+        font_bold = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_BOLD)
 
         # --- Barra de progresso ---
         self.progress_gauge = wx.Gauge(panel, range=100, style=wx.GA_HORIZONTAL)
@@ -414,8 +439,6 @@ class MyFrame(wx.Frame):
 
         self.copy_button = wx.Button(panel, label="▶  INICIAR CÓPIA")
         self.copy_button.SetBackgroundColour(wx.Colour(212, 237, 218))
-        font_bold = wx.Font(10, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                            wx.FONTWEIGHT_BOLD)
         self.copy_button.SetFont(font_bold)
         self.copy_button.Bind(wx.EVT_BUTTON, self.on_copy)
         self.copy_button.SetToolTip("Inicia a cópia dos arquivos selecionados na aba ativa")
@@ -439,7 +462,7 @@ class MyFrame(wx.Frame):
         self.main_sizer.Add(self.output_text, 1, wx.ALL | wx.EXPAND, 5)
 
         panel.SetSizer(self.main_sizer)
-        self.SetSize((800, 800))
+        self.SetSize((800, 730)) # Altura predefinida para 730px
         self.Centre()
 
         # Drop targets
@@ -600,17 +623,34 @@ class MyFrame(wx.Frame):
         self.gitignore_rules_list = wx.ListBox(left_panel, style=wx.LB_SINGLE)
         left_sizer.Add(self.gitignore_rules_list, 1, wx.EXPAND | wx.ALL, 5)
 
-        # Campo para adicionar regra manual
-        add_rule_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.gitignore_rule_input = wx.TextCtrl(left_panel)
+        # Campo para adicionar regra manual (reorganizado para ganhar espaço)
+        add_rule_vertical_sizer = wx.BoxSizer(wx.VERTICAL)
+        
+        input_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.gitignore_rule_input = wx.TextCtrl(
+            left_panel, 
+            style=wx.TE_PROCESS_ENTER
+        )
+        self.gitignore_rule_input.SetMinSize((300, -1))  # ← LARGURA AINDA MAIOR
+        self.gitignore_rule_input.SetToolTip(
+            "Digite uma regra do .gitignore (ex: *.log, temp/, !important.txt) e pressione Enter"
+        )
+        self.gitignore_rule_input.Bind(wx.EVT_TEXT_ENTER, self._on_add_gitignore_rule)
+        input_sizer.Add(self.gitignore_rule_input, 1, wx.EXPAND)
+        
+        btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         btn_add_rule = wx.Button(left_panel, label="+ Adicionar Regra")
         btn_add_rule.Bind(wx.EVT_BUTTON, self._on_add_gitignore_rule)
         btn_rem_rule = wx.Button(left_panel, label="- Remover Selecionada")
         btn_rem_rule.Bind(wx.EVT_BUTTON, self._on_remove_gitignore_rule)
-        add_rule_sizer.Add(self.gitignore_rule_input, 1, wx.ALL, 3)
-        add_rule_sizer.Add(btn_add_rule, 0, wx.ALL, 3)
-        add_rule_sizer.Add(btn_rem_rule, 0, wx.ALL, 3)
-        left_sizer.Add(add_rule_sizer, 0, wx.EXPAND | wx.ALL, 5)
+        
+        btn_sizer.Add(btn_add_rule, 1, wx.RIGHT, 5)
+        btn_sizer.Add(btn_rem_rule, 1)
+        
+        add_rule_vertical_sizer.Add(input_sizer, 0, wx.EXPAND | wx.BOTTOM, 5)
+        add_rule_vertical_sizer.Add(btn_sizer, 0, wx.EXPAND)
+        
+        left_sizer.Add(add_rule_vertical_sizer, 0, wx.EXPAND | wx.ALL, 5)
         left_panel.SetSizer(left_sizer)
 
         # Painel direito: preview de arquivos incluídos/ignorados
@@ -619,7 +659,12 @@ class MyFrame(wx.Frame):
         right_sizer.Add(wx.StaticText(right_panel,
                                       label="Preview (✅ incluído | 🚫 ignorado):"),
                         0, wx.ALL, 5)
-        self.gitignore_preview_list = wx.ListBox(right_panel, style=wx.LB_SINGLE)
+        
+        # Usar SimpleHtmlListBox para permitir cores e destaque
+        self.gitignore_preview_list = wx.html.SimpleHtmlListBox(right_panel, style=wx.LB_SINGLE)
+        self.gitignore_preview_list.SetToolTip("Selecione um item e pressione Ctrl+C para copiar")
+        self.gitignore_preview_list.Bind(wx.EVT_KEY_DOWN, self._on_preview_key_down)
+        
         right_sizer.Add(self.gitignore_preview_list, 1, wx.EXPAND | wx.ALL, 5)
 
         btn_refresh = wx.Button(right_panel, label="🔄 Atualizar Preview")
@@ -627,7 +672,7 @@ class MyFrame(wx.Frame):
         right_sizer.Add(btn_refresh, 0, wx.ALL | wx.CENTER, 5)
         right_panel.SetSizer(right_sizer)
 
-        splitter.SplitVertically(left_panel, right_panel, 300)
+        splitter.SplitVertically(left_panel, right_panel, 350) # Aumentado de 300 para 350
         sizer.Add(splitter, 1, wx.EXPAND | wx.ALL, 5)
 
         # Aviso sobre pathspec
@@ -671,13 +716,29 @@ class MyFrame(wx.Frame):
             return False
 
     def _update_selection_counter(self):
-        """Atualiza o contador de seleção em tempo real."""
-        count = len(self.selected_files)
-        # Estimativa de linhas: média de 30 linhas por arquivo como heurística rápida
-        estimated_lines = count * 30
-        wx.CallAfter(self.selection_label.SetLabel,
-                     f"{count} arquivo(s) selecionado(s) | ~{estimated_lines} linhas estimadas")
-        wx.CallAfter(self.SetStatusText, f"{count} selecionados", 1)
+        """
+        Atualiza o contador de arquivos selecionados e estimativa de linhas.
+        Chamado sempre que a seleção muda.
+        """
+        total_files = len(self.selected_files)
+        
+        # Estimativa de linhas: conta linhas reais dos arquivos selecionados
+        total_lines = 0
+        for filepath in self.selected_files:
+            try:
+                if os.path.isfile(filepath):
+                    with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+                        total_lines += sum(1 for _ in f)
+            except:
+                pass  # Se não conseguir ler, ignora
+        
+        # Atualiza o label
+        label_text = f"{total_files} arquivo(s) selecionado(s) | ~{total_lines:,} linha(s) estimadas"
+        wx.CallAfter(self.selection_label.SetLabel, label_text)
+        
+        # Atualiza também na title bar (opcional)
+        wx.CallAfter(self.SetTitle, f"Copiador de Código - {total_files} arquivo(s) selecionado(s)")
+        wx.CallAfter(self.SetStatusText, f"{total_files} selecionados", 1)
 
     def _create_checkbox_bitmap(self, checked_state):
         """Cria bitmap 16x16 simulando checkbox."""
@@ -901,18 +962,20 @@ class MyFrame(wx.Frame):
             self._gitignore_parser = None
             return
 
-        # Evitar re-parsear se o arquivo não mudou
+        # Evitar re-parsear se o arquivo não mudou e não há regras manuais novas (o parser cuida disso)
         if self._gitignore_cache_path != gitignore_path:
-            self._gitignore_parser = GitignoreParser(gitignore_path, source_dir)
+            self._gitignore_parser = GitignoreParser(
+                gitignore_path, 
+                source_dir, 
+                manual_rules=self._gitignore_manual_rules
+            )
             self._gitignore_cache_path = gitignore_path
 
-        # Atualizar lista de regras na UI
-        rules = self._gitignore_parser.get_rules_list()
-        # Adicionar regras manuais
-        all_rules = rules + [f"[manual] {r}" for r in self._gitignore_manual_rules]
+        # Atualizar lista de regras na UI (o parser já retorna arquivo + manuais)
+        all_rules = self._gitignore_parser.get_rules_list()
 
         wx.CallAfter(self.gitignore_status_label.SetLabel,
-                     f"✅ .gitignore encontrado: {len(rules)} regra(s) carregada(s).")
+                     f"✅ .gitignore encontrado: {len(all_rules)} regra(s).")
         wx.CallAfter(self.gitignore_active_cb.Enable)
         wx.CallAfter(self.gitignore_rules_list.Set, all_rules)
 
@@ -932,31 +995,45 @@ class MyFrame(wx.Frame):
         rule = self.gitignore_rule_input.GetValue().strip()
         if not rule:
             return
-        self._gitignore_manual_rules.append(rule)
-        self.gitignore_rule_input.SetValue("")
-        # Re-construir parser com regras extras
+        
         source_dir = self.source_dir_picker.GetPath()
-        if source_dir and self._gitignore_parser:
-            self._gitignore_parser.rules.append((False, rule))
+        if not source_dir or not self._gitignore_parser:
+            wx.MessageBox("Selecione o diretório de entrada primeiro.", "Aviso",
+                         wx.OK | wx.ICON_WARNING)
+            return
+        
+        if self._gitignore_parser.add_manual_rule(rule):  # ← Usa método que reconstrói parser
+            self._gitignore_manual_rules.append(rule)
+            self.gitignore_rule_input.SetValue("")
             self._refresh_gitignore_status(source_dir)
-        self.output_text.AppendText(f"✓ Regra manual adicionada: {rule}\n")
+            self.output_text.AppendText(f"✓ Regra manual adicionada: {rule}\n")
+            self._on_refresh_gitignore_preview(None)  # ← Atualiza preview automaticamente
+        else:
+            wx.MessageBox("Regra já existe ou é inválida.", "Aviso", wx.OK | wx.ICON_INFORMATION)
 
     def _on_remove_gitignore_rule(self, event):
         """Remove a regra selecionada da lista."""
         idx = self.gitignore_rules_list.GetSelection()
         if idx == wx.NOT_FOUND:
             return
+        
         rule_str = self.gitignore_rules_list.GetString(idx)
+        source_dir = self.source_dir_picker.GetPath()
+        
         if rule_str.startswith("[manual] "):
             manual_rule = rule_str[9:]
-            if manual_rule in self._gitignore_manual_rules:
-                self._gitignore_manual_rules.remove(manual_rule)
-                self.gitignore_rules_list.Delete(idx)
+            if self._gitignore_parser and self._gitignore_parser.remove_manual_rule(manual_rule):
+                if manual_rule in self._gitignore_manual_rules:
+                    self._gitignore_manual_rules.remove(manual_rule)
+                self._refresh_gitignore_status(source_dir)
+                self._on_refresh_gitignore_preview(None)  # ← Atualiza preview automaticamente
                 self.output_text.AppendText(f"✓ Regra manual removida: {manual_rule}\n")
+            else:
+                wx.MessageBox("Erro ao remover regra.", "Erro", wx.OK | wx.ICON_ERROR)
         else:
             wx.MessageBox("Apenas regras manuais podem ser removidas aqui.\n"
-                          "Edite o arquivo .gitignore para alterar as regras originais.",
-                          "Info", wx.OK | wx.ICON_INFORMATION)
+                         "Edite o arquivo .gitignore para alterar as regras originais.",
+                         "Info", wx.OK | wx.ICON_INFORMATION)
 
     def _on_refresh_gitignore_preview(self, event):
         """Gera preview de arquivos incluídos/ignorados pelo .gitignore."""
@@ -984,17 +1061,38 @@ class MyFrame(wx.Frame):
                         rel = fname
                     ignored = self._gitignore_parser.is_ignored(rel.replace(os.sep, '/'))
                     prefix = "🚫" if ignored else "✅"
-                    items.append(f"{prefix} {rel}")
+                    
+                    # Highlight em vermelho se for ignorado
+                    if ignored:
+                        items.append(f'<font color="#D32F2F"><b>{prefix} {rel}</b></font>')
+                    else:
+                        items.append(f'<font color="#2E7D32">{prefix} {rel}</font>')
+                        
                     if len(items) >= 500:
-                        items.append("... (preview limitado a 500 itens)")
+                        items.append("<i>... (preview limitado a 500 itens)</i>")
                         break
                 if len(items) >= 500:
                     break
         except Exception as e:
-            items.append(f"Erro: {e}")
+            items.append(f"<b>Erro: {e}</b>")
 
         self.gitignore_preview_list.Set(items)
+        self.SetStatusText(f"Preview: {len(items)} item(s) listados", 0)
         self.output_text.AppendText(f"✓ Preview .gitignore: {len(items)} item(s) listados.\n")
+
+    def _on_preview_key_down(self, event):
+        """Atalho de teclado para o preview."""
+        if event.GetKeyCode() == ord('C') and event.ControlDown():
+            idx = self.gitignore_preview_list.GetSelection()
+            if idx != wx.NOT_FOUND:
+                html_text = self.gitignore_preview_list.GetString(idx)
+                # Limpar tags HTML para copiar apenas texto puro
+                plain_text = re.sub('<[^<]+?>', '', html_text)
+                if wx.TheClipboard.Open():
+                    wx.TheClipboard.SetData(wx.TextDataObject(plain_text))
+                    wx.TheClipboard.Close()
+                    self.SetStatusText("Copiado!", 0)
+        event.Skip()
 
     # -----------------------------------------------------------------------
     # VARREDURA E ATUALIZAÇÃO DE LISTAS (legado mantido + melhorado)
@@ -1211,7 +1309,24 @@ class MyFrame(wx.Frame):
             self.selected_files.add(fp)
         else:
             self.selected_files.discard(fp)
-        self._sync_other_uis()
+        
+        self.Freeze()
+        try:
+            self.filter_extensions(None)
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if hasattr(self, 'text_file_list'):
+                self.text_file_list.Freeze()
+                try:
+                    for i, fp_text in enumerate(self.text_file_list.GetStrings()):
+                        if fp_text in self.all_files:
+                            self.text_file_list.Check(i, fp_text in self.selected_files)
+                finally:
+                    self.text_file_list.Thaw()
+        finally:
+            self.Thaw()
+        
+        # ← NOVO: Atualizar contador
         self._update_selection_counter()
 
     def on_text_file_list_checked(self, event):
@@ -1221,7 +1336,22 @@ class MyFrame(wx.Frame):
             self.selected_files.add(fp)
         else:
             self.selected_files.discard(fp)
-        self._sync_other_uis()
+        
+        self.Freeze()
+        try:
+            self.filter_extensions(None)
+            if hasattr(self, 'file_tree') and self.file_tree.GetRootItem().IsOk():
+                self._update_all_tree_item_images(self.file_tree.GetRootItem())
+            if hasattr(self, 'file_list'):
+                self.file_list.Freeze()
+                try:
+                    for i, item_text in enumerate(self.file_list.GetStrings()):
+                        self.file_list.Check(i, item_text in self.selected_files)
+                finally:
+                    self.file_list.Thaw()
+        finally:
+            self.Thaw()
+
         self._update_selection_counter()
 
     def on_random_file_checklist_toggled(self, event):
@@ -1454,8 +1584,48 @@ class MyFrame(wx.Frame):
             self.copy_arbitrary_files(output_directory, files)
 
         elif page_title == "Conformidade .gitignore":
-            wx.MessageBox("Use uma das outras abas para copiar arquivos com o filtro .gitignore ativo.",
-                          "Info", wx.OK | wx.ICON_INFORMATION)
+            if not source_directory:
+                wx.MessageBox("Selecione o diretório de Entrada.", "Erro", wx.OK | wx.ICON_ERROR)
+                return
+            
+            if not self._gitignore_parser:
+                wx.MessageBox("Nenhum arquivo .gitignore detectado para filtrar.", "Aviso",
+                             wx.OK | wx.ICON_WARNING)
+                return
+            
+            # Coleta todos os arquivos que NÃO estão ignorados (seguindo o que o preview mostra)
+            self.output_text.AppendText("Varrendo arquivos válidos (não ignorados)...\n")
+            all_valid_files = []
+            
+            # Reutiliza lógica de filtragem
+            for root, dirs, files in os.walk(source_directory):
+                if self._use_ignore_patterns():
+                    dirs[:] = [d for d in dirs if not _should_ignore(d, is_dir=True)]
+                
+                # Filtro de diretório no .gitignore
+                filtered_dirs = []
+                for d in dirs:
+                    rel = os.path.relpath(os.path.join(root, d), source_directory)
+                    if not self._gitignore_parser.is_ignored(rel + "/"):
+                        filtered_dirs.append(d)
+                dirs[:] = filtered_dirs
+
+                for f in files:
+                    if self._use_ignore_patterns() and _should_ignore(f):
+                        continue
+                    
+                    filepath = os.path.join(root, f)
+                    rel = os.path.relpath(filepath, source_directory)
+                    if not self._gitignore_parser.is_ignored(rel):
+                        all_valid_files.append(filepath)
+            
+            if not all_valid_files:
+                wx.MessageBox("Nenhum arquivo '✅ incluído' encontrado para copiar.", "Aviso",
+                             wx.OK | wx.ICON_WARNING)
+                return
+                
+            self.output_text.AppendText(f"✓ {len(all_valid_files)} arquivos identificados via .gitignore.\n")
+            self.copy_by_selected_file_paths(source_directory, output_directory, all_valid_files)
         else:
             wx.MessageBox(f"Lógica não implementada para: {page_title}",
                           "Erro", wx.OK | wx.ICON_ERROR)
