@@ -1,0 +1,1506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Copiador de Código v2.0</title>
+<style>
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --primary:#2563eb;--primary-dark:#1d4ed8;--primary-light:#dbeafe;
+  --success:#16a34a;--success-light:#dcfce7;
+  --warn:#d97706;--warn-light:#fef3c7;
+  --danger:#dc2626;--danger-light:#fee2e2;
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;
+  --border:#e2e8f0;--text:#1e293b;--text2:#64748b;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1);
+  --tab-h:36px;--header-h:48px;
+}
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;background:var(--bg);color:var(--text);}
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   ============================================================ */
+#app{display:flex;flex-direction:column;height:100vh;max-width:1200px;margin:0 auto;padding:8px;gap:6px;overflow:hidden;}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--primary);color:#fff;
+  padding:0 14px;height:var(--header-h);border-radius:var(--radius);
+  flex-shrink:0;
+}
+#header h1{font-size:14px;font-weight:700;}
+#header-right{display:flex;align-items:center;gap:10px;font-size:11px;opacity:.85;}
+#file-count-badge{
+  background:rgba(255,255,255,.2);padding:2px 8px;border-radius:12px;
+  font-weight:600;white-space:nowrap;
+}
+
+/* ============================================================
+   DIRS + OPTIONS (COLAPSÁVEL NO MOBILE)
+   ============================================================ */
+#config-section{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);flex-shrink:0;}
+#config-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;cursor:pointer;user-select:none;
+}
+#config-header span{font-weight:600;font-size:12px;color:var(--text2);}
+#config-toggle{font-size:11px;color:var(--text2);}
+#config-body{padding:8px 12px 10px;display:flex;flex-direction:column;gap:6px;}
+#config-body.collapsed{display:none;}
+
+.dir-row{display:flex;align-items:center;gap:6px;}
+.dir-label{font-size:11px;font-weight:600;color:var(--text2);min-width:55px;}
+.dir-input{
+  flex:1;padding:5px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:12px;background:var(--surface2);
+  color:var(--text);min-width:0;
+}
+.dir-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+.btn-browse{
+  padding:5px 10px;background:var(--primary);color:#fff;
+  border:none;border-radius:6px;cursor:pointer;font-size:11px;
+  white-space:nowrap;flex-shrink:0;
+}
+.btn-browse:hover{background:var(--primary-dark);}
+
+.opts-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.opts-row label{font-size:11px;color:var(--text2);font-weight:600;}
+select.sort-sel{
+  padding:4px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:11px;background:var(--surface);
+}
+.cb-label{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--text);}
+.cb-label input{cursor:pointer;accent-color:var(--primary);}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+#tabs-nav{display:flex;gap:2px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+#tabs-nav::-webkit-scrollbar{display:none;}
+.tab-btn{
+  padding:0 12px;height:var(--tab-h);background:var(--surface);
+  border:1px solid var(--border);border-bottom:none;
+  border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;
+  color:var(--text2);white-space:nowrap;transition:all .15s;flex-shrink:0;
+}
+.tab-btn:hover{background:var(--primary-light);color:var(--primary);}
+.tab-btn.active{background:var(--primary);color:#fff;font-weight:600;border-color:var(--primary);}
+
+/* ============================================================
+   TAB CONTENT
+   ============================================================ */
+#tab-area{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:0 var(--radius) var(--radius) var(--radius);
+  display:flex;flex-direction:column;overflow:hidden;min-height:0;
+}
+.tab-pane{display:none;flex-direction:column;gap:8px;padding:10px;flex:1;overflow:hidden;min-height:0;}
+.tab-pane.active{display:flex;}
+
+/* ============================================================
+   SEARCH ROW
+   ============================================================ */
+.search-row{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.search-row label{font-size:11px;font-weight:600;color:var(--text2);min-width:50px;}
+.search-input{
+  flex:1;padding:5px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:12px;background:var(--surface2);min-width:0;
+}
+.search-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+
+/* ============================================================
+   CHECKLIST
+   ============================================================ */
+.checklist{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.cl-item{
+  display:flex;align-items:center;gap:8px;padding:5px 10px;
+  cursor:pointer;border-bottom:1px solid var(--border);
+  transition:background .1s;user-select:none;
+}
+.cl-item:last-child{border-bottom:none;}
+.cl-item:hover{background:var(--primary-light);}
+.cl-item.checked{background:#f0fdf4;}
+.cl-item input[type=checkbox]{cursor:pointer;accent-color:var(--primary);flex-shrink:0;}
+.cl-item-text{font-size:11px;word-break:break-all;line-height:1.4;}
+.cl-item-sub{font-size:10px;color:var(--text2);}
+.cl-empty{padding:20px;text-align:center;color:var(--text2);font-size:12px;}
+
+/* ============================================================
+   BUTTON ROWS
+   ============================================================ */
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;}
+.btn-sm{
+  padding:5px 10px;border:1px solid var(--border);background:var(--surface2);
+  border-radius:6px;cursor:pointer;font-size:11px;color:var(--text);
+  transition:all .15s;white-space:nowrap;
+}
+.btn-sm:hover{background:var(--border);border-color:#cbd5e1;}
+.btn-sm.primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+.btn-sm.primary:hover{background:var(--primary-dark);}
+.btn-sm.success{background:var(--success);color:#fff;border-color:var(--success);}
+.btn-sm.danger{background:var(--danger);color:#fff;border-color:var(--danger);}
+
+/* ============================================================
+   TREE EXPLORER
+   ============================================================ */
+.tree-wrap{flex:1;overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);padding:4px;min-height:0;}
+.tree-node{line-height:1;}
+.tree-item{
+  display:flex;align-items:center;gap:4px;padding:4px 6px;
+  cursor:pointer;border-radius:4px;transition:background .1s;user-select:none;
+  min-height:28px;
+}
+.tree-item:hover{background:var(--primary-light);}
+.tree-item.checked{background:#f0fdf4;}
+.tree-item.partial{background:#fefce8;}
+.tree-toggle{font-size:9px;color:var(--text2);min-width:12px;cursor:pointer;padding:2px;}
+.tree-icon{font-size:12px;min-width:18px;text-align:center;}
+.tree-label{font-size:11px;word-break:break-all;}
+.tree-label.dir{color:var(--primary);font-weight:600;}
+.tree-children{padding-left:16px;}
+
+/* ============================================================
+   GITIGNORE
+   ============================================================ */
+.gi-split{display:flex;gap:8px;flex:1;min-height:0;overflow:hidden;}
+.gi-col{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;overflow:hidden;}
+.gi-rules{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.gi-rule{padding:3px 8px;font-size:11px;font-family:'Courier New',monospace;border-bottom:1px solid var(--border);cursor:pointer;}
+.gi-rule:hover{background:var(--primary-light);}
+.gi-rule.manual{color:#7c3aed;}
+.gi-rule.sel{background:var(--primary);color:#fff;}
+.gi-add{display:flex;gap:4px;flex-shrink:0;}
+.gi-add input{flex:1;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:'Courier New',monospace;min-width:0;}
+.preview-wrap{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.prev-item{padding:2px 8px;font-size:10px;font-family:'Courier New',monospace;border-bottom:1px solid var(--border);}
+.prev-item.ign{color:var(--danger);background:#fff5f5;}
+.prev-item.inc{color:var(--success);}
+.gi-status{font-size:11px;padding:4px 0;flex-shrink:0;}
+
+/* ============================================================
+   ARBITRARY FILES
+   ============================================================ */
+.arb-drop{
+  flex:1;overflow-y:auto;border:2px dashed var(--border);
+  border-radius:6px;background:var(--surface2);min-height:60px;
+  transition:all .2s;
+}
+.arb-drop.drag-over{border-color:var(--primary);background:var(--primary-light);}
+.arb-drop-hint{display:flex;align-items:center;justify-content:center;height:60px;color:var(--text2);font-size:12px;}
+.arb-item{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);}
+.arb-item input{accent-color:var(--primary);}
+.arb-item-name{font-size:11px;word-break:break-all;font-family:'Courier New',monospace;}
+.arb-item-size{font-size:10px;color:var(--text2);white-space:nowrap;}
+
+/* ============================================================
+   TEXT SEARCH
+   ============================================================ */
+textarea.txt-input{
+  width:100%;height:65px;padding:6px 8px;
+  border:1px solid var(--border);border-radius:6px;
+  font-family:'Courier New',monospace;font-size:11px;
+  resize:vertical;background:var(--surface2);flex-shrink:0;
+}
+textarea.txt-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+
+/* ============================================================
+   COUNTER BAR
+   ============================================================ */
+#counter-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--success-light);border:1px solid #86efac;
+  border-radius:6px;padding:5px 12px;flex-shrink:0;
+}
+#counter-text{font-size:11px;font-weight:700;color:#166534;font-family:'Courier New',monospace;}
+#token-estimate{font-size:10px;color:#166534;opacity:.8;}
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+#progress-wrap{flex-shrink:0;display:none;}
+#progress-info{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:3px;}
+#progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+#progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--success));width:0%;transition:width .2s;border-radius:3px;}
+#progress-wrap.pulse #progress-fill{animation:pulse-anim 1s ease-in-out infinite alternate;}
+@keyframes pulse-anim{from{width:15%;}to{width:85%;};}
+
+/* ============================================================
+   ACTION BUTTONS
+   ============================================================ */
+#action-row{display:flex;gap:6px;flex-shrink:0;}
+#btn-start{
+  flex:2;padding:9px;background:var(--success-light);
+  border:2px solid var(--success);border-radius:var(--radius);
+  cursor:pointer;font-size:13px;font-weight:700;color:#166534;
+  transition:all .15s;
+}
+#btn-start:hover{background:#bbf7d0;}
+#btn-start:disabled{opacity:.4;cursor:not-allowed;}
+#btn-clear{
+  flex:1;padding:9px;background:var(--warn-light);
+  border:1px solid var(--warn);border-radius:var(--radius);
+  cursor:pointer;font-size:11px;color:#92400e;transition:all .15s;
+}
+#btn-clear:hover{background:#fde68a;}
+#btn-clip{
+  flex:1;padding:9px;background:var(--primary-light);
+  border:1px solid var(--primary);border-radius:var(--radius);
+  cursor:pointer;font-size:11px;color:var(--primary);transition:all .15s;
+}
+#btn-clip:hover{background:#bfdbfe;}
+
+/* ============================================================
+   LOG (COLAPSÁVEL)
+   ============================================================ */
+#log-section{flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);}
+#log-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 10px;cursor:pointer;user-select:none;border-radius:var(--radius);
+}
+#log-header-left{display:flex;align-items:center;gap:8px;}
+#log-title{font-size:11px;font-weight:600;color:var(--text2);}
+#log-badge{
+  font-size:10px;background:var(--primary);color:#fff;
+  padding:1px 6px;border-radius:10px;min-width:18px;text-align:center;
+}
+#log-toggle-btn{font-size:10px;color:var(--text2);}
+#log-body{height:70px;overflow-y:auto;padding:6px 10px;background:#0f172a;border-radius:0 0 var(--radius) var(--radius);}
+#log-body.expanded{height:180px;}
+#log-body.collapsed{display:none;}
+.log-line{font-family:'Courier New',monospace;font-size:10px;line-height:1.5;color:#94a3b8;}
+.log-line.ok{color:#4ade80;}
+.log-line.warn{color:#fbbf24;}
+.log-line.err{color:#f87171;}
+.log-line.info{color:#60a5fa;}
+#log-clear-btn{font-size:10px;color:var(--text2);background:none;border:none;cursor:pointer;padding:2px 6px;}
+#log-clear-btn:hover{color:var(--danger);}
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+#statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:10px;color:var(--text2);flex-shrink:0;padding:0 2px;
+}
+
+/* ============================================================
+   OUTPUT MODAL
+   ============================================================ */
+#out-modal{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.6);z-index:999;
+  align-items:center;justify-content:center;padding:16px;
+}
+#out-modal.show{display:flex;}
+.modal-box{
+  background:#fff;border-radius:12px;
+  width:100%;max-width:860px;max-height:90vh;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+.modal-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:var(--primary);color:#fff;
+  border-radius:12px 12px 0 0;flex-shrink:0;
+}
+.modal-head h2{font-size:13px;}
+.modal-head-right{display:flex;align-items:center;gap:8px;}
+.modal-stats{font-size:10px;opacity:.8;}
+.modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;}
+.modal-body{flex:1;overflow:auto;padding:12px;}
+.modal-body pre{font-family:'Courier New',monospace;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.5;}
+.modal-foot{
+  padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;
+  border-top:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
+}
+.modal-foot button{padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-size:12px;}
+.btn-dl{background:var(--success);color:#fff;}
+.btn-dl:hover{background:#15803d;}
+.btn-cp-modal{background:var(--primary);color:#fff;}
+.btn-cp-modal:hover{background:var(--primary-dark);}
+.btn-close-modal{background:var(--surface2);border:1px solid var(--border) !important;color:var(--text);}
+
+/* ============================================================
+   LOADING OVERLAY (dentro do tab-area)
+   ============================================================ */
+#loading-overlay{
+  display:none;position:absolute;inset:0;
+  background:rgba(255,255,255,.85);
+  align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;border-radius:var(--radius);
+  z-index:10;
+}
+#loading-overlay.show{display:flex;}
+#loading-overlay p{font-size:12px;color:var(--text2);}
+.spinner{
+  width:32px;height:32px;border:3px solid var(--border);
+  border-top-color:var(--primary);border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+#tab-area{position:relative;}
+
+/* ============================================================
+   TOASTS
+   ============================================================ */
+#toast-wrap{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:2000;}
+.toast{
+  background:#1e293b;color:#fff;padding:8px 14px;
+  border-radius:8px;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.3);
+  animation:slide-in .2s ease;max-width:280px;
+}
+.toast.ok{border-left:3px solid var(--success);}
+.toast.warn{border-left:3px solid var(--warn);}
+.toast.err{border-left:3px solid var(--danger);}
+@keyframes slide-in{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* ============================================================
+   MOBILE — max 640px
+   ============================================================ */
+@media(max-width:640px){
+  #app{padding:4px;gap:4px;}
+  #header h1{font-size:12px;}
+  #header-right{gap:6px;}
+  #tabs-nav{gap:1px;}
+  .tab-btn{padding:0 8px;font-size:10px;height:32px;}
+  #action-row{flex-wrap:wrap;}
+  #btn-start{flex:100%;}
+  #btn-clear,#btn-clip{flex:1;}
+  .gi-split{flex-direction:column;max-height:none;}
+  .gi-col{max-height:160px;}
+  .modal-box{max-height:95vh;}
+  .modal-foot{justify-content:stretch;}
+  .modal-foot button{flex:1;}
+  .tree-item{min-height:36px;}
+  .cl-item{min-height:36px;}
+  .arb-item{min-height:40px;}
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--surface2);}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <h1>📁 Copiador de Código v2.0</h1>
+    <div id="header-right">
+      <span id="file-count-badge">0 arquivos</span>
+      <span id="header-status">Pronto</span>
+    </div>
+  </div>
+
+  <!-- CONFIG SECTION (colapsável) -->
+  <div id="config-section">
+    <div id="config-header" onclick="toggleConfig()">
+      <span>⚙ Configurações</span>
+      <span id="config-toggle">▼ recolher</span>
+    </div>
+    <div id="config-body">
+      <div class="dir-row">
+        <span class="dir-label">📂 Entrada:</span>
+        <input class="dir-input" id="src-input" type="text" placeholder="Selecione a pasta de entrada..." readonly>
+        <button class="btn-browse" onclick="pickSourceDir()">Procurar…</button>
+        <input type="file" id="src-picker" webkitdirectory multiple style="display:none">
+      </div>
+      <div class="dir-row">
+        <span class="dir-label">💾 Saída:</span>
+        <input class="dir-input" id="out-name-input" type="text" placeholder="codigo_completo.txt" value="codigo_completo.txt">
+      </div>
+      <div class="opts-row">
+        <label>Ordem:</label>
+        <select class="sort-sel" id="sort-sel">
+          <option value="natural">Natural</option>
+          <option value="alpha">Alfabética</option>
+        </select>
+        <label class="cb-label">
+          <input type="checkbox" id="ignore-cb" checked onchange="state.applyIgnorePatterns=this.checked">
+          Excluir padrões globais
+        </label>
+        <label class="cb-label">
+          <input type="checkbox" id="size-filter-cb">
+          Ignorar &gt; <input type="number" id="max-size-kb" value="500" min="1" style="width:55px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;"> KB
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS NAV -->
+  <div id="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab('ext')">Extensões</button>
+    <button class="tab-btn" onclick="switchTab('files')">Arquivos</button>
+    <button class="tab-btn" onclick="switchTab('search')">Buscar Nome</button>
+    <button class="tab-btn" onclick="switchTab('explorer')">Explorador</button>
+    <button class="tab-btn" onclick="switchTab('arb')">Avulsos</button>
+    <button class="tab-btn" onclick="switchTab('gi')">Gitignore</button>
+  </div>
+
+  <!-- TAB AREA -->
+  <div id="tab-area">
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <p id="loading-text">Carregando metadados…</p>
+    </div>
+
+    <!-- EXT -->
+    <div class="tab-pane active" id="tab-ext">
+      <div class="search-row">
+        <label>🔍</label>
+        <input class="search-input" id="ext-search" placeholder="Filtrar extensões…" oninput="renderExtList()">
+      </div>
+      <div class="checklist" id="ext-list"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+      <div class="btn-row">
+        <button class="btn-sm" onclick="selAllExt()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllExt()">⬜ Nenhum</button>
+        <span id="ext-counter" style="font-size:10px;color:var(--text2);margin-left:auto;align-self:center;"></span>
+      </div>
+    </div>
+
+    <!-- FILES -->
+    <div class="tab-pane" id="tab-files">
+      <div class="search-row">
+        <label>🔍</label>
+        <input class="search-input" id="file-search" placeholder="Filtrar arquivos…" oninput="renderFileList()">
+      </div>
+      <div class="checklist" id="file-list"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+      <div class="btn-row">
+        <button class="btn-sm" onclick="selAllFiles()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllFiles()">⬜ Nenhum</button>
+        <span id="file-counter" style="font-size:10px;color:var(--text2);margin-left:auto;align-self:center;"></span>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="tab-pane" id="tab-search">
+      <small style="color:var(--text2);flex-shrink:0;">Cole nomes, caminhos ou saída de <code>git status</code>:</small>
+      <textarea class="txt-input" id="txt-search" placeholder="modified: src/main.py&#10;new file: config.json&#10;utils, README"></textarea>
+      <div class="btn-row">
+        <button class="btn-sm primary" onclick="doSearch()">🔍 Buscar</button>
+        <button class="btn-sm" onclick="selAllSearch()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllSearch()">⬜ Nenhum</button>
+      </div>
+      <div class="checklist" id="search-list"><div class="cl-empty">Use o campo acima para buscar.</div></div>
+    </div>
+
+    <!-- EXPLORER -->
+    <div class="tab-pane" id="tab-explorer">
+      <small style="color:var(--text2);flex-shrink:0;">Toque/clique para marcar arquivos e pastas:</small>
+      <div class="tree-wrap" id="tree-wrap"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+    </div>
+
+    <!-- ARBITRARY -->
+    <div class="tab-pane" id="tab-arb">
+      <small style="color:var(--text2);flex-shrink:0;">Adicione arquivos avulsos de qualquer local (arraste & solte):</small>
+      <div class="arb-drop" id="arb-drop"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleArbDrop(event)">
+        <div class="arb-drop-hint" id="arb-hint">⬆ Arraste arquivos aqui ou use o botão abaixo</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-sm primary" onclick="document.getElementById('arb-picker').click()">➕ Adicionar…</button>
+        <button class="btn-sm" onclick="remCheckedArb()">➖ Remover</button>
+        <button class="btn-sm danger" onclick="clearArb()">🗑 Limpar</button>
+      </div>
+      <input type="file" id="arb-picker" multiple style="display:none" onchange="handleArbPicker(event)">
+    </div>
+
+    <!-- GITIGNORE -->
+    <div class="tab-pane" id="tab-gi">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;">
+        <label class="cb-label">
+          <input type="checkbox" id="gi-cb" onchange="toggleGI()" disabled>
+          Aplicar regras .gitignore
+        </label>
+        <div class="gi-status" id="gi-status">⚠ Nenhum diretório selecionado.</div>
+      </div>
+      <div class="gi-split">
+        <div class="gi-col">
+          <small style="font-weight:600;color:var(--text2);">Regras:</small>
+          <div class="gi-rules" id="gi-rules"></div>
+          <div class="gi-add">
+            <input type="text" id="gi-input" placeholder="Ex: *.log, temp/" onkeydown="if(event.key==='Enter')addGIRule()">
+            <button class="btn-sm primary" onclick="addGIRule()">+</button>
+            <button class="btn-sm" onclick="remGIRule()">−</button>
+          </div>
+        </div>
+        <div class="gi-col">
+          <small style="font-weight:600;color:var(--text2);">Preview:</small>
+          <div class="preview-wrap" id="gi-preview"></div>
+          <button class="btn-sm" onclick="refreshGIPreview()">🔄 Atualizar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COUNTER -->
+  <div id="counter-bar">
+    <span id="counter-text">0 arquivo(s) selecionado(s) | ~0 linhas</span>
+    <span id="token-estimate">~0 tokens estimados</span>
+  </div>
+
+  <!-- PROGRESS -->
+  <div id="progress-wrap">
+    <div id="progress-info">
+      <span id="prog-label">Processando…</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div id="progress-track"><div id="progress-fill"></div></div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div id="action-row">
+    <button id="btn-start" onclick="startCopy()">▶ INICIAR CÓPIA</button>
+    <button id="btn-clear" onclick="clearAll()">🗑 Limpar</button>
+    <button id="btn-clip" onclick="clipboardCopy()">📋 Clipboard</button>
+  </div>
+
+  <!-- LOG COLAPSÁVEL -->
+  <div id="log-section">
+    <div id="log-header" onclick="toggleLog()">
+      <div id="log-header-left">
+        <span id="log-title">📋 Log</span>
+        <span id="log-badge">0</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="log-clear-btn" onclick="event.stopPropagation();clearLog()">limpar</button>
+        <button class="btn-sm" id="log-expand-btn" onclick="event.stopPropagation();expandLog()" style="padding:2px 6px;font-size:10px;">⛶ expandir</button>
+        <span id="log-toggle-btn">▲ recolher</span>
+      </div>
+    </div>
+    <div id="log-body"></div>
+  </div>
+
+  <!-- STATUS -->
+  <div id="statusbar">
+    <span id="st-left">Pronto</span>
+    <span id="st-right">v2.0 — HTML Edition</span>
+  </div>
+</div>
+
+<!-- OUTPUT MODAL -->
+<div id="out-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>📄 codigo_completo.txt</h2>
+      <div class="modal-head-right">
+        <span class="modal-stats" id="modal-stats"></span>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body"><pre id="modal-pre"></pre></div>
+    <div class="modal-foot">
+      <button class="btn-cp-modal" onclick="copyModalContent()">📋 Copiar tudo</button>
+      <button class="btn-dl" onclick="downloadOutput()">⬇ Baixar .txt</button>
+      <button class="btn-close-modal" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div id="toast-wrap"></div>
+
+<script>
+'use strict';
+// ============================================================
+// STATE
+// ============================================================
+const S = {
+  // Metadados apenas (leitura lazy)
+  allMeta: [],          // [{name,relPath,ext,size,isBinary,file(ref)}]
+  allExts: [],          // string[]
+  selectedFiles: new Set(),   // relPath
+  selectedExts: new Set(),
+  arbFiles: [],         // [{name,content,size}]
+  giFileRules: [],      // linhas do .gitignore
+  giManualRules: [],    // adicionadas pelo usuário
+  giSelIdx: -1,
+  applyGI: false,
+  applyIgnorePatterns: true,
+  lastOutput: '',
+  activeTab: 'ext',
+  searchResults: [],
+  treeData: null,
+  logCount: 0,
+  logCollapsed: false,
+  configCollapsed: false,
+  cancelFlag: false,    // para cancelar carregamento
+};
+
+// ============================================================
+// CONSTANTES
+// ============================================================
+const IGNORE = [
+  '.git','__pycache__','node_modules','venv','.venv','env','.env',
+  'dist','build','.tox','.mypy_cache','.pytest_cache',
+  '*.log','*.pyc','*.pyo','.DS_Store','Thumbs.db','*.egg-info',
+];
+const BINARY_EXTS = new Set([
+  '.png','.jpg','.jpeg','.gif','.bmp','.ico','.svg','.webp',
+  '.mp3','.mp4','.avi','.mov','.mkv','.wav','.ogg',
+  '.zip','.tar','.gz','.rar','.7z',
+  '.exe','.dll','.so','.dylib','.bin','.dat',
+  '.pdf','.doc','.docx','.xls','.xlsx','.ppt','.pptx',
+  '.ttf','.woff','.woff2','.eot',
+  '.db','.sqlite','.sqlite3',
+]);
+
+// ============================================================
+// UTILS
+// ============================================================
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function natKey(s){ return s.replace(/(\d+)/g,m=>m.padStart(20,'0')); }
+function sortArr(arr){
+  const nat = document.getElementById('sort-sel').value === 'natural';
+  return [...arr].sort((a,b)=>{
+    const ka = nat ? natKey(a) : a.toLowerCase();
+    const kb = nat ? natKey(b) : b.toLowerCase();
+    return ka<kb?-1:ka>kb?1:0;
+  });
+}
+function sortArrBy(arr,fn){
+  const nat = document.getElementById('sort-sel').value === 'natural';
+  return [...arr].sort((a,b)=>{
+    const ka = nat ? natKey(fn(a)) : fn(a).toLowerCase();
+    const kb = nat ? natKey(fn(b)) : fn(b).toLowerCase();
+    return ka<kb?-1:ka>kb?1:0;
+  });
+}
+function getExt(name){
+  const d = name.lastIndexOf('.');
+  if(d<=0){ return name.startsWith('.') ? name : '(sem extensão)'; }
+  return name.slice(d).toLowerCase();
+}
+function isBinExt(name){ return BINARY_EXTS.has(getExt(name)); }
+function fnMatch(name,pat){
+  const re = '^'+pat.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*/g,'.*').replace(/\?/g,'.')+'$';
+  return new RegExp(re,'i').test(name);
+}
+function shouldIgnoreGlobal(name){
+  if(!S.applyIgnorePatterns) return false;
+  return IGNORE.some(p=>p.includes('*')?fnMatch(name,p):name===p);
+}
+function shouldIgnoreSize(size){
+  if(!document.getElementById('size-filter-cb').checked) return false;
+  const maxKb = Number(document.getElementById('max-size-kb').value)||500;
+  return size > maxKb*1024;
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+function $id(id){ return document.getElementById(id); }
+
+// ============================================================
+// LOG
+// ============================================================
+function log(msg,type=''){
+  S.logCount++;
+  $id('log-badge').textContent = S.logCount > 99 ? '99+' : S.logCount;
+  const body = $id('log-body');
+  if(S.logCollapsed) return;
+  const d = document.createElement('div');
+  d.className = 'log-line'+(type?' '+type:'');
+  d.textContent = `[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`;
+  body.appendChild(d);
+  body.scrollTop = body.scrollHeight;
+}
+function clearLog(){
+  $id('log-body').innerHTML='';
+  S.logCount=0;
+  $id('log-badge').textContent='0';
+}
+function toggleLog(){
+  const body=$id('log-body');
+  S.logCollapsed=!S.logCollapsed;
+  body.classList.toggle('collapsed',S.logCollapsed);
+  $id('log-toggle-btn').textContent=S.logCollapsed?'▼ expandir':'▲ recolher';
+}
+function expandLog(){
+  const body=$id('log-body');
+  body.classList.toggle('expanded');
+  $id('log-expand-btn').textContent=body.classList.contains('expanded')?'⛶ reduzir':'⛶ expandir';
+}
+function setStatus(l,r=''){
+  $id('st-left').textContent=l;
+  if(r)$id('st-right').textContent=r;
+  $id('header-status').textContent=l;
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function toast(msg,type='ok',ms=2800){
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  t.textContent=msg;
+  $id('toast-wrap').appendChild(t);
+  setTimeout(()=>t.remove(),ms);
+}
+
+// ============================================================
+// CONFIG COLLAPSE
+// ============================================================
+function toggleConfig(){
+  S.configCollapsed=!S.configCollapsed;
+  $id('config-body').classList.toggle('collapsed',S.configCollapsed);
+  $id('config-toggle').textContent=S.configCollapsed?'▶ expandir':'▼ recolher';
+}
+
+// ============================================================
+// TABS
+// ============================================================
+function switchTab(id){
+  S.activeTab=id;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>{
+    const ids=['ext','files','search','explorer','arb','gi'];
+    b.classList.toggle('active',ids[i]===id);
+  });
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  $id(`tab-${id}`).classList.add('active');
+  if(id==='explorer') refreshTreeVisuals();
+}
+
+// ============================================================
+// LOADING OVERLAY
+// ============================================================
+function showLoading(txt='Carregando…'){
+  $id('loading-overlay').classList.add('show');
+  $id('loading-text').textContent=txt;
+  $id('btn-start').disabled=true;
+}
+function hideLoading(){
+  $id('loading-overlay').classList.remove('show');
+  $id('btn-start').disabled=false;
+}
+
+// ============================================================
+// PROGRESS
+// ============================================================
+function setProgress(val,max=100,label=''){
+  const wrap=$id('progress-wrap');
+  if(val===null){ wrap.style.display='none'; wrap.classList.remove('pulse'); return; }
+  wrap.style.display='block';
+  if(val==='pulse'){ wrap.classList.add('pulse'); $id('prog-label').textContent=label||'Processando…'; return; }
+  wrap.classList.remove('pulse');
+  const pct=Math.round((val/max)*100);
+  $id('progress-fill').style.width=pct+'%';
+  $id('prog-pct').textContent=pct+'%';
+  $id('prog-label').textContent=label||`${val} / ${max}`;
+}
+
+// ============================================================
+// COUNTER
+// ============================================================
+function updateCounter(){
+  const count=S.selectedFiles.size;
+  let lines=0;
+  S.selectedFiles.forEach(rp=>{
+    const m=S.allMeta.find(x=>x.relPath===rp);
+    if(m) lines+=m.lines||0;
+  });
+  const tokens=Math.round(lines*5);
+  $id('counter-text').textContent=`${count} arquivo(s) selecionado(s) | ~${lines.toLocaleString()} linhas`;
+  $id('token-estimate').textContent=`~${tokens.toLocaleString()} tokens est.`;
+  $id('file-count-badge').textContent=`${S.allMeta.length} arq.`;
+  $id('st-right').textContent=`${count} sel. | ${S.allMeta.length} total`;
+}
+
+// ============================================================
+// GITIGNORE ENGINE
+// ============================================================
+function giMatches(relPath){
+  if(!S.applyGI) return false;
+  const rules=[...S.giFileRules,...S.giManualRules].filter(l=>l.trim()&&!l.trim().startsWith('#'));
+  let ignored=false;
+  const norm=relPath.replace(/\\/g,'/');
+  for(const raw of rules){
+    let neg=raw.startsWith('!');
+    let rule=(neg?raw.slice(1):raw).trim();
+    if(!rule) continue;
+    const dirOnly=rule.endsWith('/');
+    if(dirOnly) rule=rule.slice(0,-1);
+    let regStr=rule.replace(/[.+^${}()|[\]\\]/g,'\\$&').replace(/\*\*/g,'§').replace(/\*/g,'[^/]*').replace(/\?/g,'[^/]').replace(/§/g,'.*');
+    const hasSlash=rule.replace(/\/$/,'').includes('/');
+    let matched=false;
+    if(hasSlash){
+      matched=new RegExp(`^${regStr}(/.*)?$`).test(norm);
+    } else {
+      const base=norm.split('/').pop();
+      matched=new RegExp(`^${regStr}$`).test(base)||new RegExp(`(^|/)${regStr}(/|$)`).test(norm);
+    }
+    if(matched) ignored=!neg;
+  }
+  return ignored;
+}
+
+// ============================================================
+// FILE LOADING — METADADOS APENAS (lazy content)
+// ============================================================
+function pickSourceDir(){ $id('src-picker').click(); }
+
+$id('src-picker').addEventListener('change',function(e){
+  const files=Array.from(e.target.files);
+  if(!files.length) return;
+  loadMetadata(files);
+});
+
+async function loadMetadata(files){
+  S.cancelFlag=false;
+  showLoading('Lendo metadados…');
+  setProgress('pulse',100,'Analisando arquivos…');
+  log('⟳ Iniciando varredura (apenas metadados)…','info');
+
+  const topDir=(files[0].webkitRelativePath||files[0].name).split('/')[0];
+  $id('src-input').value=topDir;
+  S.allMeta=[];
+
+  // Filtrar e construir metadados SEM ler conteúdo
+  const BATCH=200;
+  let processed=0;
+
+  for(let i=0;i<files.length;i+=BATCH){
+    if(S.cancelFlag) break;
+    const batch=files.slice(i,Math.min(i+BATCH,files.length));
+    for(const file of batch){
+      const relPath=file.webkitRelativePath||file.name;
+      const parts=relPath.split('/');
+      const name=parts[parts.length-1];
+      // Ignorar por padrão global
+      let skip=false;
+      for(const p of parts){ if(shouldIgnoreGlobal(p)){skip=true;break;} }
+      if(skip) continue;
+      if(shouldIgnoreSize(file.size)) continue;
+      const ext=getExt(name);
+      const bin=isBinExt(name);
+      // Estimativa de linhas por tamanho (sem ler)
+      const estLines=bin?0:Math.round(file.size/45);
+      S.allMeta.push({name,relPath,ext,size:file.size,isBinary:bin,lines:estLines,file});
+    }
+    processed+=batch.length;
+    setProgress(processed,files.length,`Analisando ${processed}/${files.length}…`);
+    $id('loading-text').textContent=`Metadados: ${S.allMeta.length} arquivos encontrados…`;
+    await sleep(0); // Ceder controle para a UI
+  }
+
+  // Ordenar
+  S.allMeta=sortArrBy(S.allMeta,m=>m.relPath);
+
+  // Extrair extensões únicas
+  const extSet=new Set(S.allMeta.map(m=>m.ext));
+  S.allExts=sortArr([...extSet]);
+
+  // Buscar .gitignore
+  const giFile=S.allMeta.find(m=>m.name==='.gitignore');
+  if(giFile){
+    await readFileSingle(giFile.file).then(txt=>{
+      S.giFileRules=txt?txt.split('\n').map(l=>l.trimEnd()):[];
+      $id('gi-status').textContent=`✅ .gitignore: ${S.giFileRules.length} linha(s).`;
+      $id('gi-cb').disabled=false;
+      renderGIRules();
+    });
+  } else {
+    S.giFileRules=[];
+    $id('gi-status').textContent='⚠ Nenhum .gitignore encontrado.';
+    $id('gi-cb').disabled=true;
+    $id('gi-cb').checked=false;
+    S.applyGI=false;
+  }
+
+  // Renderizar tudo
+  renderExtList();
+  renderFileList();
+  buildTree();
+  hideLoading();
+  setProgress(null);
+  setStatus(`✓ ${S.allMeta.length} arquivo(s) prontos`);
+  log(`✓ ${S.allMeta.length} arquivo(s), ${S.allExts.length} extensão(ões).`,'ok');
+  updateCounter();
+}
+
+function readFileSingle(file){
+  return new Promise(resolve=>{
+    const r=new FileReader();
+    r.onload=e=>resolve(e.target.result);
+    r.onerror=()=>resolve(null);
+    r.readAsText(file,'UTF-8');
+  });
+}
+
+// Leitura em lote (usada na geração do output)
+async function readFilesBatch(metas, onProgress){
+  const BATCH=15;
+  const results=new Map();
+  for(let i=0;i<metas.length;i+=BATCH){
+    const batch=metas.slice(i,Math.min(i+BATCH,metas.length));
+    await Promise.all(batch.map(m=>{
+      if(m.isBinary) return Promise.resolve(results.set(m.relPath,null));
+      return readFileSingle(m.file).then(txt=>results.set(m.relPath,txt));
+    }));
+    onProgress(Math.min(i+BATCH,metas.length),metas.length);
+    await sleep(0);
+  }
+  return results;
+}
+
+// ============================================================
+// RENDER: EXTENSIONS
+// ============================================================
+function renderExtList(){
+  const q=$id('ext-search').value.toLowerCase();
+  const list=$id('ext-list');
+  const filtered=S.allExts.filter(e=>e.toLowerCase().includes(q));
+  if(!filtered.length){list.innerHTML='<div class="cl-empty">Nenhuma extensão encontrada.</div>';return;}
+  list.innerHTML='';
+  filtered.forEach(ext=>{
+    const count=S.allMeta.filter(m=>m.ext===ext).length;
+    const sel=S.selectedExts.has(ext);
+    const d=document.createElement('div');
+    d.className='cl-item'+(sel?' checked':'');
+    d.innerHTML=`<input type="checkbox"${sel?' checked':''}><span class="cl-item-text">${esc(ext)}</span><span class="cl-item-sub">${count} arq.</span>`;
+    d.querySelector('input').onchange=ev=>{
+      if(ev.target.checked){S.selectedExts.add(ext);d.classList.add('checked');}
+      else{S.selectedExts.delete(ext);d.classList.remove('checked');}
+      $id('ext-counter').textContent=`${S.selectedExts.size} sel.`;
+    };
+    list.appendChild(d);
+  });
+  $id('ext-counter').textContent=`${S.selectedExts.size} sel.`;
+}
+function selAllExt(){S.allExts.forEach(e=>S.selectedExts.add(e));renderExtList();}
+function deselAllExt(){S.selectedExts.clear();renderExtList();}
+
+// ============================================================
+// RENDER: FILES
+// ============================================================
+function renderFileList(){
+  const q=$id('file-search').value.toLowerCase();
+  const list=$id('file-list');
+  const filtered=q?S.allMeta.filter(m=>m.relPath.toLowerCase().includes(q)):S.allMeta;
+  if(!filtered.length){list.innerHTML='<div class="cl-empty">Nenhum arquivo.</div>';return;}
+  list.innerHTML='';
+  const frag=document.createDocumentFragment();
+  filtered.forEach(m=>{
+    const sel=S.selectedFiles.has(m.relPath);
+    const d=document.createElement('div');
+    d.className='cl-item'+(sel?' checked':'');
+    const parts=m.relPath.split('/');
+    const dir=parts.slice(0,-1).join('/');
+    d.innerHTML=`<input type="checkbox"${sel?' checked':''}><div style="min-width:0;flex:1"><div class="cl-item-text">${esc(m.name)}</div>${dir?`<div class="cl-item-sub">${esc(dir)}</div>`:''}</div><span class="cl-item-sub" style="white-space:nowrap">${(m.size/1024).toFixed(0)}KB</span>`;
+    d.querySelector('input').onchange=ev=>{
+      if(ev.target.checked){S.selectedFiles.add(m.relPath);d.classList.add('checked');}
+      else{S.selectedFiles.delete(m.relPath);d.classList.remove('checked');}
+      updateCounter();
+    };
+    frag.appendChild(d);
+  });
+  list.appendChild(frag);
+  $id('file-counter').textContent=`${filtered.length} vis. / ${S.selectedFiles.size} sel.`;
+}
+function selAllFiles(){S.allMeta.forEach(m=>S.selectedFiles.add(m.relPath));renderFileList();updateCounter();}
+function deselAllFiles(){S.allMeta.forEach(m=>S.selectedFiles.delete(m.relPath));renderFileList();updateCounter();}
+
+// ============================================================
+// SEARCH
+// ============================================================
+function doSearch(){
+  const raw=$id('txt-search').value.trim();
+  if(!raw){S.searchResults=S.allMeta.map(m=>m.relPath);renderSearchList();return;}
+  const terms=raw.split(/[\s,\n]+/).filter(Boolean).map(t=>{
+    t=t.replace(/^(modified:|new file:|deleted:|renamed:)\s*/i,'').trim();
+    if(t.includes('->'))t=t.split('->').pop().trim();
+    return t;
+  }).filter(Boolean);
+  const found=new Set();
+  S.allMeta.forEach(m=>{
+    const rp=m.relPath.replace(/\\/g,'/');
+    const noExt=m.name.replace(/\.[^.]+$/,'');
+    for(const term of terms){
+      const tl=term.toLowerCase().replace(/\\/g,'/');
+      const hasSlash=tl.includes('/');
+      if(hasSlash){
+        if(rp.toLowerCase().endsWith(tl)){found.add(m.relPath);break;}
+      } else {
+        if(m.name.toLowerCase()===tl||noExt.toLowerCase()===tl){found.add(m.relPath);break;}
+      }
+    }
+  });
+  S.searchResults=[...found];
+  renderSearchList();
+  if(!found.size) toast('Nenhum arquivo encontrado.','warn');
+  else log(`✓ ${found.size} arquivo(s) encontrado(s).`,'ok');
+}
+function renderSearchList(){
+  const list=$id('search-list');
+  if(!S.searchResults.length){list.innerHTML='<div class="cl-empty">Nenhum resultado.</div>';return;}
+  list.innerHTML='';
+  const frag=document.createDocumentFragment();
+  S.searchResults.forEach(rp=>{
+    const sel=S.selectedFiles.has(rp);
+    const d=document.createElement('div');
+    d.className='cl-item'+(sel?' checked':'');
+    d.innerHTML=`<input type="checkbox"${sel?' checked':''}><span class="cl-item-text">${esc(rp)}</span>`;
+    d.querySelector('input').onchange=ev=>{
+      if(ev.target.checked){S.selectedFiles.add(rp);d.classList.add('checked');}
+      else{S.selectedFiles.delete(rp);d.classList.remove('checked');}
+      updateCounter();
+    };
+    frag.appendChild(d);
+  });
+  list.appendChild(frag);
+}
+function selAllSearch(){S.searchResults.forEach(rp=>S.selectedFiles.add(rp));renderSearchList();updateCounter();}
+function deselAllSearch(){S.searchResults.forEach(rp=>S.selectedFiles.delete(rp));renderSearchList();updateCounter();}
+
+// ============================================================
+// TREE EXPLORER
+// ============================================================
+function setTreeFileVisual(el, selected){
+  el.classList.toggle('checked', selected);
+  const ic=el.querySelector('.tree-icon');
+  if(ic) ic.textContent=selected?'☑':'☐';
+}
+function setTreeDirVisual(el, selectedCount, totalCount){
+  const full=totalCount>0 && selectedCount===totalCount;
+  const partial=selectedCount>0 && selectedCount<totalCount;
+  el.classList.toggle('checked', full);
+  el.classList.toggle('partial', partial);
+  const ic=el.querySelector('.tree-icon');
+  if(ic) ic.textContent=selectedCount===0?'☐':full?'☑':'⊟';
+}
+function refreshTreeVisuals(rootEl=$id('tree-wrap')){
+  if(!rootEl) return;
+
+  // 1) Sincroniza todos os arquivos renderizados com S.selectedFiles.
+  rootEl.querySelectorAll('.tree-item[data-rp]').forEach(el=>{
+    setTreeFileVisual(el,S.selectedFiles.has(el.dataset.rp));
+  });
+
+  // 2) Sincroniza todas as pastas/subpastas com base nos arquivos descendentes.
+  //    Isso garante que, ao marcar uma pasta, todas as subpastas apareçam marcadas também.
+  [...rootEl.querySelectorAll('.tree-node')].reverse().forEach(nodeEl=>{
+    const item=nodeEl.children[0];
+    const childDiv=nodeEl.children[1];
+    if(!item||!childDiv) return;
+    const fileEls=[...childDiv.querySelectorAll('.tree-item[data-rp]')];
+    const total=fileEls.length;
+    const selected=fileEls.filter(el=>S.selectedFiles.has(el.dataset.rp)).length;
+    setTreeDirVisual(item,selected,total);
+  });
+}
+function buildTree(){
+  const root={name:'',ch:{},files:[]};
+  S.allMeta.forEach(m=>{
+    const parts=m.relPath.split('/');
+    let node=root;
+    for(let i=0;i<parts.length-1;i++){
+      if(!node.ch[parts[i]]) node.ch[parts[i]]={name:parts[i],ch:{},files:[]};
+      node=node.ch[parts[i]];
+    }
+    node.files.push(m);
+  });
+  S.treeData=root;
+  const wrap=$id('tree-wrap');
+  wrap.innerHTML='';
+  renderTreeNode(root,wrap);
+}
+function getAllFilesInNode(node){
+  let f=[...node.files];
+  Object.values(node.ch).forEach(c=>f=f.concat(getAllFilesInNode(c)));
+  return f;
+}
+function renderTreeNode(node,container){
+  const dirs=Object.keys(node.ch).sort((a,b)=>natKey(a)<natKey(b)?-1:1);
+  dirs.forEach(dk=>{
+    if(shouldIgnoreGlobal(dk)) return;
+    const child=node.ch[dk];
+    const allF=getAllFilesInNode(child);
+
+    const wrap=document.createElement('div');
+    wrap.className='tree-node';
+
+    const item=document.createElement('div');
+
+    // Função que atualiza o visual do item de pasta sem reconstruir a árvore
+    function updateDirVisual(){
+      const selC=allF.filter(m=>S.selectedFiles.has(m.relPath)).length;
+      const cls=selC===0?'':selC===allF.length?' checked':' partial';
+      const icon=selC===0?'☐':selC===allF.length?'☑':'⊟';
+      item.className=`tree-item${cls}`;
+      item.querySelector('.tree-icon').textContent=icon;
+    }
+
+    const selC=allF.filter(m=>S.selectedFiles.has(m.relPath)).length;
+    const cls=selC===0?'':selC===allF.length?' checked':' partial';
+    const icon=selC===0?'☐':selC===allF.length?'☑':'⊟';
+    item.className=`tree-item${cls}`;
+    item.innerHTML=`<span class="tree-toggle">▶</span><span class="tree-icon">${icon}</span><span class="tree-label dir">${esc(dk)}</span>`;
+
+    const tog=item.querySelector('.tree-toggle');
+    const childDiv=document.createElement('div');
+    childDiv.className='tree-children';
+    childDiv.style.display='none';
+
+    // Abre/fecha sem reconstruir
+    tog.onclick=ev=>{
+      ev.stopPropagation();
+      const open=childDiv.style.display==='block';
+      childDiv.style.display=open?'none':'block';
+      tog.textContent=open?'▶':'▼';
+    };
+
+    // Marca/desmarca sem reconstruir
+    item.onclick=ev=>{
+      if(ev.target===tog) return;
+      const nowSelC=allF.filter(m=>S.selectedFiles.has(m.relPath)).length;
+      const allSel=allF.length>0 && nowSelC===allF.length;
+      allF.forEach(m=>allSel
+          ?S.selectedFiles.delete(m.relPath)
+          :S.selectedFiles.add(m.relPath)
+      );
+      log(`Pasta ${allSel?'desmarcada':'marcada'}: ${dk}`);
+      // Sincroniza a pasta clicada, todas as subpastas e todos os arquivos descendentes.
+      refreshTreeVisuals();
+      updateCounter();
+    };
+
+    renderTreeNode(child,childDiv);
+    wrap.appendChild(item);
+    wrap.appendChild(childDiv);
+    container.appendChild(wrap);
+  });
+
+  const sortedF=sortArrBy(node.files,m=>m.name);
+  sortedF.forEach(m=>{
+    if(shouldIgnoreGlobal(m.name)) return;
+    const sel=S.selectedFiles.has(m.relPath);
+    const d=document.createElement('div');
+    d.className=`tree-item${sel?' checked':''}`;
+    d.dataset.rp=m.relPath; // ← guarda o path para updates dos pais
+    d.innerHTML=`<span class="tree-toggle"></span><span class="tree-icon">${sel?'☑':'☐'}</span><span class="tree-label">${esc(m.name)}</span><span class="cl-item-sub" style="margin-left:auto;white-space:nowrap">${(m.size/1024).toFixed(0)}KB</span>`;
+    d.onclick=()=>{
+      const isNowSel=S.selectedFiles.has(m.relPath);
+      if(isNowSel){S.selectedFiles.delete(m.relPath);}
+      else{S.selectedFiles.add(m.relPath);}
+      // Sem buildTree() aqui. Apenas sincroniza o item e os pais/subpastas afetados.
+      refreshTreeVisuals();
+      updateCounter();
+    };
+    container.appendChild(d);
+  });
+}
+
+// ============================================================
+// ARBITRARY FILES
+// ============================================================
+function handleArbPicker(e){readArbFiles(Array.from(e.target.files));e.target.value='';}
+function handleArbDrop(e){
+  e.preventDefault();$id('arb-drop').classList.remove('drag-over');
+  readArbFiles(Array.from(e.dataTransfer.files));
+}
+function readArbFiles(files){
+  let n=0;
+  files.forEach(f=>{
+    if(S.arbFiles.some(a=>a.name===f.name&&a.size===f.size)) return;
+    readFileSingle(f).then(txt=>{
+      S.arbFiles.push({name:f.name,content:txt,size:f.size});
+      n++;renderArbList();
+    });
+  });
+  log(`${files.length} arquivo(s) avulso(s) adicionado(s).`,'ok');
+}
+function renderArbList(){
+  const drop=$id('arb-drop');
+  $id('arb-hint').style.display=S.arbFiles.length?'none':'flex';
+  // Remove old items
+  [...drop.querySelectorAll('.arb-item')].forEach(el=>el.remove());
+  S.arbFiles.forEach((f,i)=>{
+    const d=document.createElement('div');
+    d.className='arb-item';
+    d.innerHTML=`<input type="checkbox" checked data-i="${i}" style="accent-color:var(--primary)"><span class="arb-item-name">${esc(f.name)}</span><span class="arb-item-size">${(f.size/1024).toFixed(1)}KB</span>`;
+    drop.appendChild(d);
+  });
+}
+function remCheckedArb(){
+  const idxs=[...$id('arb-drop').querySelectorAll('input:checked')].map(c=>+c.dataset.i).sort((a,b)=>b-a);
+  idxs.forEach(i=>S.arbFiles.splice(i,1));
+  renderArbList();
+  log(`${idxs.length} removido(s).`,'ok');
+}
+function clearArb(){S.arbFiles=[];renderArbList();log('Lista avulsa limpa.','ok');}
+
+// ============================================================
+// GITIGNORE UI
+// ============================================================
+function toggleGI(){S.applyGI=$id('gi-cb').checked;log(`Gitignore ${S.applyGI?'ativado':'desativado'}.`,'info');}
+function renderGIRules(){
+  const c=$id('gi-rules');c.innerHTML='';
+  const all=[...S.giFileRules,...S.giManualRules.map(r=>`[manual] ${r}`)];
+  all.forEach((r,i)=>{
+    const d=document.createElement('div');
+    d.className='gi-rule'+(r.startsWith('[manual]')?' manual':'')+(S.giSelIdx===i?' sel':'');
+    d.textContent=r;d.onclick=()=>{S.giSelIdx=i;renderGIRules();};
+    c.appendChild(d);
+  });
+}
+function addGIRule(){
+  const v=$id('gi-input').value.trim();
+  if(!v||S.giManualRules.includes(v)){toast('Regra já existe ou vazia.','warn');return;}
+  S.giManualRules.push(v);$id('gi-input').value='';
+  renderGIRules();log(`Regra adicionada: ${v}`,'ok');refreshGIPreview();
+}
+function remGIRule(){
+  if(S.giSelIdx<0) return;
+  const fl=S.giFileRules.length;
+  if(S.giSelIdx<fl){toast('Apenas regras manuais podem ser removidas.','warn');return;}
+  const r=S.giManualRules.splice(S.giSelIdx-fl,1)[0];
+  S.giSelIdx=-1;renderGIRules();log(`Regra removida: ${r}`,'ok');refreshGIPreview();
+}
+function refreshGIPreview(){
+  const c=$id('gi-preview');c.innerHTML='';
+  if(!S.allMeta.length){toast('Carregue os arquivos primeiro.','warn');return;}
+  const preview=S.allMeta.slice(0,400);
+  const frag=document.createDocumentFragment();
+  preview.forEach(m=>{
+    const ign=giMatches(m.relPath);
+    const d=document.createElement('div');
+    d.className='prev-item '+(ign?'ign':'inc');
+    d.textContent=`${ign?'🚫':'✅'} ${m.relPath}`;
+    frag.appendChild(d);
+  });
+  c.appendChild(frag);
+  log(`Preview: ${preview.length} item(s).`,'ok');
+}
+
+// ============================================================
+// COPY MAIN
+// ============================================================
+async function startCopy(){
+  const tab=S.activeTab;
+  const src=$id('src-input').value||'Entrada';
+  const outName=$id('out-name-input').value.trim()||'codigo_completo.txt';
+  let metas=[];
+
+  if(tab==='ext'){
+    if(!S.selectedExts.size){toast('Selecione ao menos uma extensão.','warn');return;}
+    metas=S.allMeta.filter(m=>S.selectedExts.has(m.ext)&&!giMatches(m.relPath)&&!m.isBinary);
+  } else if(tab==='files'){
+    metas=S.allMeta.filter(m=>S.selectedFiles.has(m.relPath)&&!giMatches(m.relPath)&&!m.isBinary);
+  } else if(tab==='search'){
+    metas=S.allMeta.filter(m=>S.selectedFiles.has(m.relPath)&&!giMatches(m.relPath)&&!m.isBinary);
+  } else if(tab==='explorer'){
+    metas=S.allMeta.filter(m=>S.selectedFiles.has(m.relPath)&&!giMatches(m.relPath)&&!m.isBinary);
+  } else if(tab==='arb'){
+    const checked=[...$id('arb-drop').querySelectorAll('input:checked')].map(c=>S.arbFiles[+c.dataset.i]).filter(Boolean);
+    if(!checked.length){toast('Nenhum avulso selecionado.','warn');return;}
+    genArbitraryOutput(checked,outName);return;
+  } else if(tab==='gi'){
+    if(!S.allMeta.length){toast('Carregue os arquivos primeiro.','warn');return;}
+    metas=S.allMeta.filter(m=>!giMatches(m.relPath)&&!shouldIgnoreGlobal(m.name)&&!m.isBinary);
+  }
+
+  if(!metas.length){toast('Nenhum arquivo para copiar.','warn');return;}
+
+  // Aviso de tamanho
+  const totalSize=metas.reduce((s,m)=>s+m.size,0);
+  if(totalSize>10*1024*1024){
+    if(!confirm(`⚠ Estimativa: ${(totalSize/1024/1024).toFixed(1)} MB. Continuar?`)) return;
+  }
+
+  await genOutput(metas,src,outName);
+}
+
+async function genOutput(metas,srcDir,outName){
+  log(`Gerando output: ${metas.length} arquivo(s)…`,'info');
+  $id('btn-start').disabled=true;
+  setProgress(0,metas.length,'Lendo arquivos…');
+
+  // Leitura em lote (lazy — só agora lemos o conteúdo)
+  const contentMap=await readFilesBatch(metas,(done,total)=>{
+    setProgress(done,total,`Lendo ${done}/${total}…`);
+  });
+
+  setProgress('pulse',100,'Gerando texto…');
+  await sleep(0);
+
+  const filters=[];
+  if(S.applyIgnorePatterns) filters.push('padrões globais');
+  if(S.applyGI) filters.push('.gitignore');
+
+  let out=buildHeader(srcDir,metas.length,filters);
+  let copied=0,skipped=0;
+
+  for(const m of metas){
+    const content=contentMap.get(m.relPath);
+    if(content==null){log(`[IGNORADO] ${m.relPath}`,'warn');skipped++;continue;}
+    const sep='='.repeat(42)+'\n';
+    out+=sep+`Conteúdo de ${m.name} (caminho: ${m.relPath}) [enc: utf-8]:\n`+sep+content+'\n\n';
+    copied++;
+  }
+
+  out+='\n'+'='.repeat(42)+'\nEstrutura de pastas:\n'+'='.repeat(42)+'\n';
+  out+=buildTreeTxt(metas,srcDir);
+
+  S.lastOutput=out;
+  setProgress(null);
+  $id('btn-start').disabled=false;
+  log(`✓ ${copied} arquivo(s) gerado(s). ${skipped} ignorado(s).`,'ok');
+  toast(`✓ ${copied} arquivo(s) prontos!`,'ok');
+  showModal(out,outName,copied,out.length);
+  updateCounter();
+}
+
+async function genArbitraryOutput(files,outName){
+  log(`Unindo ${files.length} avulso(s)…`,'info');
+  let out=buildHeader('Arquivos Avulsos',files.length,[]);
+  let n=0;
+  files.forEach(f=>{
+    if(!f.content){log(`[IGNORADO] ${f.name}`,'warn');return;}
+    out+='='.repeat(42)+'\n'+`Conteúdo de ${f.name}:\n`+'='.repeat(42)+'\n'+f.content+'\n\n';
+    n++;
+  });
+  out+='\n'+'='.repeat(42)+'\nArquivos:\n'+'='.repeat(42)+'\n';
+  files.forEach(f=>out+=`- ${f.name}\n`);
+  S.lastOutput=out;
+  toast(`✓ ${n} avulso(s) prontos!`,'ok');
+  showModal(out,outName,n,out.length);
+}
+
+// ============================================================
+// BUILD HEADER / TREE TEXT
+// ============================================================
+function buildHeader(src,count,filters){
+  const now=new Date().toLocaleString('pt-BR');
+  let h='='.repeat(60)+'\n  COPIADOR DE CÓDIGO v2.0\n'+'='.repeat(60)+'\n';
+  h+=`  Data/Hora     : ${now}\n  Origem        : ${src}\n  Total arquivos: ${count}\n`;
+  if(filters.length) h+=`  Filtros       : ${filters.join(', ')}\n`;
+  h+='='.repeat(60)+'\n\n';
+  return h;
+}
+function buildTreeTxt(metas,rootName){
+  const root={name:rootName,ch:{},files:[]};
+  metas.forEach(m=>{
+    const parts=m.relPath.split('/');
+    let node=root;
+    for(let i=0;i<parts.length-1;i++){
+      if(!node.ch[parts[i]]) node.ch[parts[i]]={name:parts[i],ch:{},files:[]};
+      node=node.ch[parts[i]];
+    }
+    node.files.push(m);
+  });
+  function print(node,prefix,isLast){
+    let out='';
+    const keys=Object.keys(node.ch).sort();
+    const items=[...keys.map(k=>({t:'d',name:k,node:node.ch[k]})),...node.files.map(f=>({t:'f',name:f.name}))];
+    items.forEach((c,i)=>{
+      const last=i===items.length-1;
+      out+=prefix+(last?'`-- ':'|-- ')+c.name+'\n';
+      if(c.t==='d') out+=print(c.node,prefix+(last?'  ':'| '),last);
+    });
+    return out;
+  }
+  return root.name+'\n'+print(root,'',true);
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function showModal(content,filename,count,chars){
+  $id('modal-pre').textContent=content;
+  $id('modal-stats').textContent=`${count} arq. | ${chars.toLocaleString()} chars`;
+  $id('out-modal').classList.add('show');
+  $id('out-modal').dataset.fn=filename;
+}
+function closeModal(){$id('out-modal').classList.remove('show');}
+function copyModalContent(){copyText($id('modal-pre').textContent);}
+function downloadOutput(){
+  const c=$id('modal-pre').textContent;
+  const fn=$id('out-modal').dataset.fn||'codigo_completo.txt';
+  const blob=new Blob([c],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=fn;a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Download iniciado!','ok');
+  log(`Download: ${fn}`,'ok');
+}
+
+// ============================================================
+// CLIPBOARD
+// ============================================================
+function clipboardCopy(){
+  if(!S.lastOutput){toast('Execute a cópia primeiro.','warn');return;}
+  copyText(S.lastOutput);
+}
+function copyText(txt){
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(txt).then(()=>{
+      toast(`✓ Copiado (${txt.length.toLocaleString()} chars)`,'ok');
+      log(`Copiado: ${txt.length.toLocaleString()} caracteres.`,'ok');
+    }).catch(()=>fallbackCopy(txt));
+  } else fallbackCopy(txt);
+}
+function fallbackCopy(txt){
+  const ta=document.createElement('textarea');
+  ta.value=txt;ta.style.cssText='position:fixed;opacity:0';
+  document.body.appendChild(ta);ta.select();document.execCommand('copy');
+  document.body.removeChild(ta);
+  toast('✓ Copiado!','ok');
+}
+
+// ============================================================
+// CLEAR ALL
+// ============================================================
+function clearAll(){
+  S.allMeta=[];S.allExts=[];S.selectedFiles.clear();S.selectedExts.clear();
+  S.arbFiles=[];S.giFileRules=[];S.giManualRules=[];S.applyGI=false;
+  S.lastOutput='';S.searchResults=[];S.giSelIdx=-1;S.cancelFlag=true;
+
+  $id('src-input').value='';$id('src-picker').value='';
+  $id('ext-search').value='';$id('file-search').value='';
+  $id('txt-search').value='';$id('gi-input').value='';
+  $id('gi-cb').checked=false;$id('gi-cb').disabled=true;
+
+  ['ext-list','file-list','search-list','gi-rules','gi-preview'].forEach(id=>{
+    $id(id).innerHTML='<div class="cl-empty">Selecione uma pasta de entrada.</div>';
+  });
+  $id('tree-wrap').innerHTML='<div class="cl-empty">Selecione uma pasta de entrada.</div>';
+  $id('arb-drop').innerHTML='<div class="arb-drop-hint" id="arb-hint">⬆ Arraste arquivos aqui ou use o botão abaixo</div>';
+  $id('gi-status').textContent='⚠ Nenhum diretório selecionado.';
+
+  updateCounter();setStatus('Pronto','v2.0');
+  log('✓ Tudo limpo.','ok');toast('Limpo!','ok');
+  setProgress(null);
+}
+
+// ============================================================
+// KEYBOARD
+// ============================================================
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if($id('out-modal').classList.contains('show')){closeModal();return;}
+    if(S.activeTab==='ext'){$id('ext-search').value='';renderExtList();}
+    else if(S.activeTab==='files'){$id('file-search').value='';renderFileList();}
+  }
+});
+
+// ============================================================
+// INIT
+// ============================================================
+log('Bem-vindo ao Copiador de Código v2.0 — HTML Edition.','info');
+log('Selecione uma pasta de entrada para começar.','info');
+updateCounter();
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a0c3fa650bcfc131',t:'MTc4MTU1MTcwOA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

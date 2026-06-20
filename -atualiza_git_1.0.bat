@@ -9,29 +9,31 @@ echo Diretorio atual: %cd%
 echo =====================================
 echo      GIT AUTOMATION MENU
 echo =====================================
-echo 1. Verificar status do repositorio (git status)
-echo 2. Adicionar todas as alteracoes (git add .)
-echo 3. Adicionar e Comitar (git add . ^&^& git commit -m "...")
-echo 4. Fazer commit (git commit)
-echo 5. Fazer push para o GitHub (git push)
-echo 6. Fazer pull do repositorio (git pull)
-echo 7. Mostrar log de commits (git log)
-echo 8. Obter link do projeto (git remote -v)
-echo 9. Outras opcoes
-echo 0. Sair
+echo 1.  Verificar status do repositorio (git status)
+echo 2.  Adicionar todas as alteracoes (git add .)
+echo 3.  Adicionar e Comitar (git add . ^&^& git commit -m "...")
+echo 4.  Fazer commit (git commit)
+echo 5.  Fazer push para o GitHub (git push)
+echo 6.  Fazer pull do repositorio (git pull)
+echo 7.  Mostrar log de commits (git log)
+echo 8.  Obter link do projeto (git remote -v)
+echo 9.  Outras opcoes
+echo 10. Carregar usuario padrao (GuilhermeFerreira42)
+echo 0.  Sair
 echo =====================================
 set /p escolha="Escolha uma opcao: "
 
-if %escolha%==1 goto status
-if %escolha%==2 goto add
-if %escolha%==3 goto add_commit
-if %escolha%==4 goto commit
-if %escolha%==5 goto push
-if %escolha%==6 goto pull
-if %escolha%==7 goto log
-if %escolha%==8 goto link
-if %escolha%==9 goto outras_opcoes
-if %escolha%==0 goto fim
+if %escolha%==1  goto status
+if %escolha%==2  goto add
+if %escolha%==3  goto add_commit
+if %escolha%==4  goto commit
+if %escolha%==5  goto push
+if %escolha%==6  goto pull
+if %escolha%==7  goto log
+if %escolha%==8  goto link
+if %escolha%==9  goto outras_opcoes
+if %escolha%==10 goto usuario_padrao
+if %escolha%==0  goto fim
 goto menu
 
 :status
@@ -93,18 +95,48 @@ git remote -v
 pause
 goto menu
 
+:: ─────────────────────────────────────────────
+::  OPCAO 10 - Carregar usuario padrao
+:: ─────────────────────────────────────────────
+:usuario_padrao
+cls
+echo =====================================
+echo   CARREGANDO USUARIO PADRAO
+echo =====================================
+echo  Usuario : GuilhermeFerreira42
+echo  Email   : guiduarte42@hotmail.com
+echo =====================================
+git config user.name  "GuilhermeFerreira42"
+git config user.email "guiduarte42@hotmail.com"
+git config core.autocrlf true
+echo.
+echo Usuario padrao configurado com sucesso!
+echo Aviso de CRLF desativado (core.autocrlf = true)
+echo.
+echo Confirmando configuracao atual:
+echo - Usuario     :
+git config user.name
+echo - Email       :
+git config user.email
+echo - autocrlf    :
+git config core.autocrlf
+pause
+goto menu
+
+:: ─────────────────────────────────────────────
+
 :outras_opcoes
 cls
 echo Outras opcoes
 echo ========================================================
-echo 1. Restaurar arquivos deletados (git checkout -- .) 
-echo 2. Sincronizar com repositorio (git fetch origin) 
-echo 3. Fazer fetch do repositorio (git fetch) 
-echo 4. Fazer merge de branches (git merge <branch>) 
-echo 5. Inicializar um novo repositorio (git init) 
-echo 6. Desfazer alteracoes (git reset) 
-echo 7. Descartar todas as alteracoes (git checkout .) 
-echo 8. Listar branches (git branch) 
+echo 1. Restaurar arquivos deletados (git checkout -- .)
+echo 2. Sincronizar com repositorio (git fetch origin)
+echo 3. Fazer fetch do repositorio (git fetch)
+echo 4. Fazer merge de branches (git merge ^<branch^>)
+echo 5. Inicializar um novo repositorio (git init)
+echo 6. Desfazer alteracoes (git reset)
+echo 7. Descartar todas as alteracoes (git checkout .)
+echo 8. Listar branches (git branch)
 echo 9. Gerenciamento de Usuario
 echo 0. Voltar ao menu principal
 echo ========================================================
@@ -124,7 +156,7 @@ goto outras_opcoes
 
 :restaurar
 echo Restaurando arquivos deletados...
-git checkout -- . 
+git checkout -- .
 pause
 goto outras_opcoes
 
@@ -149,7 +181,7 @@ goto outras_opcoes
 
 :init
 echo Inicializando um novo repositorio...
-git init 
+git init
 pause
 goto outras_opcoes
 
@@ -162,7 +194,7 @@ goto outras_opcoes
 
 :descartar
 echo Descartando todas as alteracoes locais...
-git checkout . [cite: 7]
+git checkout .
 pause
 goto outras_opcoes
 
@@ -194,7 +226,7 @@ goto usuario_menu
 echo Configurando novo usuario...
 set /p user_name="Digite seu nome de usuario do GitHub: "
 set /p user_email="Digite seu email do GitHub: "
-git config user.name "%user_name%"
+git config user.name  "%user_name%"
 git config user.email "%user_email%"
 echo Usuario "%user_name%" configurado com sucesso!
 pause
@@ -216,3 +248,6 @@ git config --unset user.email
 echo Configuracao de usuario removida.
 pause
 goto usuario_menu
+
+:fim
+exit
