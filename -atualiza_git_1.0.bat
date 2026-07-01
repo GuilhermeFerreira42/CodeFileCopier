@@ -19,6 +19,7 @@ echo 7.  Mostrar log de commits (git log)
 echo 8.  Obter link do projeto (git remote -v)
 echo 9.  Outras opcoes
 echo 10. Carregar usuario padrao (GuilhermeFerreira42)
+echo 11. Renormalizar line endings (git add --renormalize .)
 echo 0.  Sair
 echo =====================================
 set /p escolha="Escolha uma opcao: "
@@ -33,6 +34,7 @@ if %escolha%==7  goto log
 if %escolha%==8  goto link
 if %escolha%==9  goto outras_opcoes
 if %escolha%==10 goto usuario_padrao
+if %escolha%==11 goto renormalizar
 if %escolha%==0  goto fim
 goto menu
 
@@ -120,6 +122,33 @@ echo - Email       :
 git config user.email
 echo - autocrlf    :
 git config core.autocrlf
+pause
+goto menu
+
+:: ─────────────────────────────────────────────
+::  OPCAO 11 - Renormalizar line endings
+:: ─────────────────────────────────────────────
+:renormalizar
+cls
+echo =====================================
+echo   RENORMALIZAR LINE ENDINGS
+echo =====================================
+echo Diretorio atual: %cd%
+echo.
+echo Isto vai re-aplicar as regras do .gitattributes
+echo a todos os arquivos rastreados, corrigindo falsos
+echo positivos de "arquivo alterado" causados por CRLF/LF.
+echo.
+if not exist ".gitattributes" (
+    echo AVISO: nenhum arquivo .gitattributes encontrado neste diretorio.
+    echo A renormalizacao pode nao ter efeito sem ele.
+    echo.
+)
+echo Executando: git add --renormalize .
+git add --renormalize .
+echo.
+echo Status apos renormalizacao:
+git status
 pause
 goto menu
 

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Restaurador • GreenForge</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; }
+    .file-row, .folder-row { transition: background .1s; }
+    .file-row:hover, .folder-row:hover { background: #18181b; }
+    .tree-container { font-size: 14px; }
+    .preview-btn { opacity: 0.6; }
+    .preview-btn:hover { opacity: 1; }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-200">
+  <div class="max-w-4xl mx-auto py-10 px-6">
+    <div class="mb-8">
+      <h1 class="text-3xl font-semibold tracking-tight">Restaurador de Projetos</h1>
+      <p class="text-zinc-400 mt-1">Carrega o .txt e baixa ZIP ou arquivo direto</p>
+    </div>
+
+    <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-8">
+      
+      <!-- Upload -->
+      <div id="uploadArea">
+        <div id="dropzone" class="border-2 border-dashed border-zinc-700 hover:border-violet-500 rounded-3xl p-10 text-center cursor-pointer bg-zinc-950">
+          <input type="file" id="fileInput" accept=".txt" class="hidden">
+          <div class="flex flex-col items-center">
+            <div class="w-11 h-11 bg-zinc-800 rounded-2xl flex items-center justify-center mb-3">📁</div>
+            <p class="font-medium">Arraste o arquivo .txt aqui</p>
+            <p class="text-sm text-zinc-400 mt-1">ou clique para escolher</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- File Info -->
+      <div id="fileInfo" class="hidden">
+        <div class="flex items-center justify-between bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-3 mb-6">
+          <div>
+            <div id="fileName" class="font-medium"></div>
+            <div id="fileMeta" class="text-xs text-emerald-400"></div>
+          </div>
+          <button onclick="resetAll()" class="text-sm text-zinc-400 hover:text-white">Trocar arquivo</button>
+        </div>
+
+        <!-- Top controls -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <div class="flex items-center gap-x-3">
+            <span class="font-medium">Arquivos</span>
+            <span id="countBadge" class="text-sm bg-violet-800 text-violet-200 px-2.5 py-0.5 rounded-full font-medium"></span>
+          </div>
+
+          <div class="flex items-center gap-x-2 flex-wrap">
+            <label class="flex items-center gap-x-2 text-sm cursor-pointer mr-2">
+              <input type="checkbox" id="selectAllCheck" class="w-4 h-4 accent-violet-600" checked>
+              <span>Marcar todos</span>
+            </label>
+
+            <button onclick="selectAll(true)" class="text-xs px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700">Marcar tudo</button>
+            <button onclick="selectAll(false)" class="text-xs px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700">Desmarcar tudo</button>
+
+            <!-- Expand / Collapse -->
+            <button onclick="expandAll(true)" class="text-xs px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700">Expandir tudo</button>
+            <button onclick="expandAll(false)" class="text-xs px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700">Recolher tudo</button>
+          </div>
+        </div>
+
+        <!-- Tree -->
+        <div id="treeContainer" class="tree-container border border-zinc-800 rounded-3xl bg-zinc-950 p-2 max-h-[420px] overflow-auto">
+          <!-- populated by JS -->
+        </div>
+
+        <div class="mt-6">
+          <button onclick="downloadSelected()"
+                  class="w-full h-14 bg-violet-600 hover:bg-violet-500 transition-colors text-white font-semibold rounded-2xl text-lg flex items-center justify-center gap-x-2">
+            📥 Baixar selecionados
+          </button>
+          <p class="text-center text-xs text-zinc-500 mt-3">
+            Se selecionar apenas 1 arquivo → baixa direto (sem zip).<br>
+            Vários arquivos → gera ZIP com estrutura.
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Preview Modal -->
+  <div id="previewModal" onclick="if (event.target.id === 'previewModal') closePreview()" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[60]">
+    <div onclick="event.stopImmediatePropagation()" class="bg-zinc-900 border border-zinc-700 rounded-3xl w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col">
+      <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+        <div class="flex items-center gap-x-3">
+          <span id="previewPath" class="font-medium text-sm break-all"></span>
+        </div>
+        <button onclick="closePreview()" class="text-zinc-400 hover:text-white text-xl leading-none">×</button>
+      </div>
+      
+      <div class="p-5 flex-1 overflow-auto">
+        <pre id="previewContent" class="text-xs bg-zinc-950 p-4 rounded-2xl whitespace-pre-wrap break-all font-mono max-h-[420px] overflow-auto"></pre>
+      </div>
+      
+      <div class="px-5 py-4 border-t border-zinc-800 flex flex-wrap gap-3 justify-end">
+        <button onclick="downloadCurrentPreview()" 
+                class="px-5 py-2.5 text-sm rounded-2xl bg-emerald-600 hover:bg-emerald-500 font-medium flex items-center gap-x-2">
+          ⬇️ Baixar este arquivo (direto)
+        </button>
+        <button onclick="closePreview()" 
+                class="px-5 py-2.5 text-sm rounded-2xl bg-zinc-800 hover:bg-zinc-700">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allFiles = [];
+    let selected = new Set();
+    let expandedFolders = new Set(); // for collapse/expand state
+
+    function init() {
+      const drop = document.getElementById('dropzone');
+      const input = document.getElementById('fileInput');
+
+      drop.addEventListener('click', () => input.click());
+      input.addEventListener('change', e => e.target.files[0] && handleFile(e.target.files[0]));
+
+      drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('border-violet-500'); });
+      drop.addEventListener('dragleave', () => drop.classList.remove('border-violet-500'));
+      drop.addEventListener('drop', e => {
+        e.preventDefault();
+        drop.classList.remove('border-violet-500');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+      });
+
+      document.getElementById('selectAllCheck').addEventListener('change', function() {
+        selectAll(this.checked);
+      });
+    }
+
+    function handleFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        allFiles = parseFile(e.target.result);
+        if (allFiles.length === 0) {
+          alert("Nenhum arquivo encontrado no formato esperado.");
+          return;
+        }
+        // Select ALL by default
+        selected = new Set(allFiles.map(f => f.path));
+        expandedFolders = new Set(); // start collapsed or we can pre-expand
+
+        document.getElementById('uploadArea').classList.add('hidden');
+        document.getElementById('fileInfo').classList.remove('hidden');
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileMeta').textContent = (file.size / 1024).toFixed(1) + ' KB';
+
+        renderTree();
+        updateCount();
+      };
+      reader.readAsText(file);
+    }
+
+    function parseFile(text) {
+      const SEP = '='.repeat(42);
+      const files = [];
+      const regex = new RegExp(SEP + '\\nConteúdo de (.+?) \\(caminho: (.+?)\\) \\[enc: utf-8\\]:\\n' + SEP + '\\n', 'g');
+
+      let matches = [];
+      let m;
+      while ((m = regex.exec(text)) !== null) {
+        matches.push({ name: m[1].trim(), path: m[2].trim(), start: regex.lastIndex });
+      }
+
+      for (let i = 0; i < matches.length; i++) {
+        const end = matches[i+1] ? matches[i+1].start - (SEP.length + 2) : text.length;
+        let content = text.substring(matches[i].start, end).replace(/\n+$/, '');
+        files.push({ path: matches[i].path, name: matches[i].name, content });
+      }
+      return files;
+    }
+
+    // Build tree structure
+    function buildTree(files) {
+      const root = { folders: {}, files: [] };
+      files.forEach(f => {
+        const parts = f.path.split('/');
+        let node = root;
+        for (let i = 0; i < parts.length - 1; i++) {
+          const p = parts[i];
+          if (!node.folders[p]) node.folders[p] = { folders: {}, files: [] };
+          node = node.folders[p];
+        }
+        node.files.push(f);
+      });
+      return root;
+    }
+
+    function renderTree() {
+      const container = document.getElementById('treeContainer');
+      container.innerHTML = '';
+      const tree = buildTree(allFiles);
+      renderLevel(container, tree, '', true);
+    }
+
+    function renderLevel(parentEl, node, currentPath, isRoot = false) {
+      // Render folders
+      Object.keys(node.folders).forEach(folderName => {
+        const folderNode = node.folders[folderName];
+        const folderPath = currentPath ? `${currentPath}/${folderName}` : folderName;
+
+        const folderDiv = document.createElement('div');
+        folderDiv.className = 'folder-group ml-3 mb-1';
+
+        // Folder row
+        const folderRow = document.createElement('div');
+        folderRow.className = 'folder-row flex items-center gap-x-2 px-2 py-1.5 rounded-xl cursor-pointer';
+
+        const isExpanded = expandedFolders.has(folderPath) || expandedFolders.size === 0; // default expand first time
+
+        const folderCheck = document.createElement('input');
+        folderCheck.type = 'checkbox';
+        folderCheck.className = 'w-4 h-4 accent-violet-600';
+        folderCheck.checked = isFolderFullySelected(folderPath);
+
+        folderCheck.addEventListener('change', (e) => {
+          e.stopImmediatePropagation();
+          toggleFolderSelection(folderPath, folderCheck.checked);
+        });
+
+        folderRow.appendChild(folderCheck);
+
+        const label = document.createElement('div');
+        label.className = 'flex-1 flex items-center gap-x-1.5';
+        label.innerHTML = `
+          <span class="text-violet-300">📁</span>
+          <span class="font-medium">${folderName}</span>
+        `;
+
+        // Toggle expand on folder click (except checkbox)
+        label.addEventListener('click', (e) => {
+          e.stopImmediatePropagation();
+          if (expandedFolders.has(folderPath)) {
+            expandedFolders.delete(folderPath);
+          } else {
+            expandedFolders.add(folderPath);
+          }
+          renderTree(); // re-render to update visibility
+        });
+
+        folderRow.appendChild(label);
+
+        // Small select-all-under button
+        const selectAllUnder = document.createElement('button');
+        selectAllUnder.className = 'text-[10px] px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400';
+        selectAllUnder.textContent = 'selecionar tudo aqui';
+        selectAllUnder.onclick = (e) => {
+          e.stopImmediatePropagation();
+          selectAllUnderFolder(folderPath, true);
+        };
+        folderRow.appendChild(selectAllUnder);
+
+        folderDiv.appendChild(folderRow);
+
+        // Children container
+        const children = document.createElement('div');
+        children.className = 'ml-5 ' + (isExpanded ? '' : 'hidden');
+        children.dataset.folder = folderPath;
+
+        // Recurse
+        renderLevel(children, folderNode, folderPath);
+
+        // Render files in this folder
+        folderNode.files.forEach(file => {
+          children.appendChild(createFileRow(file));
+        });
+
+        folderDiv.appendChild(children);
+        parentEl.appendChild(folderDiv);
+      });
+
+      // Root level files
+      if (node.files && node.files.length > 0) {
+        node.files.forEach(file => {
+          parentEl.appendChild(createFileRow(file));
+        });
+      }
+    }
+
+    function createFileRow(file) {
+      const row = document.createElement('div');
+      row.className = 'file-row flex items-center gap-x-2 px-3 py-1.5 ml-2 rounded-xl text-sm';
+
+      const checked = selected.has(file.path) ? 'checked' : '';
+
+      row.innerHTML = `
+        <input type="checkbox" class="w-4 h-4 accent-violet-600" ${checked}>
+        <span class="flex-1 truncate cursor-pointer" style="color:#a1a1aa">${file.name}</span>
+        <span class="text-[10px] text-zinc-500">${(file.content.length/1024).toFixed(1)} KB</span>
+        <span class="preview-btn text-xs px-1.5 py-0.5 text-zinc-400 hover:text-violet-400 cursor-pointer">👁</span>
+      `;
+
+      const cb = row.querySelector('input[type="checkbox"]');
+      const nameSpan = row.querySelector('span');
+      const eye = row.querySelector('.preview-btn');
+
+      // Checkbox toggle
+      cb.addEventListener('change', () => {
+        if (cb.checked) selected.add(file.path);
+        else selected.delete(file.path);
+        updateCount();
+        syncMasterCheck();
+      });
+
+      // Click on name → toggle selection (main request)
+      nameSpan.addEventListener('click', () => {
+        if (selected.has(file.path)) {
+          selected.delete(file.path);
+          cb.checked = false;
+        } else {
+          selected.add(file.path);
+          cb.checked = true;
+        }
+        updateCount();
+        syncMasterCheck();
+      });
+
+      // Eye icon → open preview
+      eye.addEventListener('click', (e) => {
+        e.stopImmediatePropagation();
+        showPreview(file);
+      });
+
+      return row;
+    }
+
+    function isFolderFullySelected(folderPath) {
+      const filesUnder = getFilesUnderFolder(folderPath);
+      if (filesUnder.length === 0) return false;
+      return filesUnder.every(f => selected.has(f.path));
+    }
+
+    function getFilesUnderFolder(folderPath) {
+      return allFiles.filter(f => f.path.startsWith(folderPath + '/') || f.path === folderPath);
+    }
+
+    function toggleFolderSelection(folderPath, shouldSelect) {
+      const filesUnder = getFilesUnderFolder(folderPath);
+      filesUnder.forEach(f => {
+        if (shouldSelect) selected.add(f.path);
+        else selected.delete(f.path);
+      });
+      updateCount();
+      syncMasterCheck();
+      renderTree(); // refresh folder checkboxes
+    }
+
+    function selectAllUnderFolder(folderPath, shouldSelect) {
+      const filesUnder = getFilesUnderFolder(folderPath);
+      filesUnder.forEach(f => {
+        if (shouldSelect) selected.add(f.path);
+        else selected.delete(f.path);
+      });
+      updateCount();
+      syncMasterCheck();
+      renderTree();
+    }
+
+    function updateCount() {
+      document.getElementById('countBadge').textContent = `${selected.size} / ${allFiles.length}`;
+    }
+
+    function syncMasterCheck() {
+      const master = document.getElementById('selectAllCheck');
+      const total = allFiles.length;
+      const sel = selected.size;
+
+      if (sel === 0) {
+        master.checked = false;
+        master.indeterminate = false;
+      } else if (sel === total) {
+        master.checked = true;
+        master.indeterminate = false;
+      } else {
+        master.checked = false;
+        master.indeterminate = true;
+      }
+    }
+
+    function selectAll(shouldSelect) {
+      selected.clear();
+      if (shouldSelect) {
+        allFiles.forEach(f => selected.add(f.path));
+      }
+      renderTree();
+      updateCount();
+      document.getElementById('selectAllCheck').checked = shouldSelect;
+      document.getElementById('selectAllCheck').indeterminate = false;
+    }
+
+    function expandAll(expand) {
+      expandedFolders.clear();
+      if (expand) {
+        // pre-populate with all folder paths
+        const tree = buildTree(allFiles);
+        collectAllFolderPaths(tree, '', expandedFolders);
+      }
+      renderTree();
+    }
+
+    function collectAllFolderPaths(node, current, set) {
+      Object.keys(node.folders || {}).forEach(key => {
+        const nextPath = current ? `${current}/${key}` : key;
+        set.add(nextPath);
+        collectAllFolderPaths(node.folders[key], nextPath, set);
+      });
+    }
+
+    function showPreview(file) {
+      document.getElementById('previewPath').textContent = file.path;
+      const pre = document.getElementById('previewContent');
+      pre.textContent = file.content.length > 25000 
+        ? file.content.slice(0, 25000) + '\n\n... (conteúdo truncado para visualização)' 
+        : file.content;
+
+      // Store current file for download button
+      window.currentPreviewFile = file;
+
+      document.getElementById('previewModal').classList.remove('hidden');
+      document.getElementById('previewModal').classList.add('flex');
+    }
+
+    function closePreview() {
+      const modal = document.getElementById('previewModal');
+      modal.classList.remove('flex');
+      modal.classList.add('hidden');
+      window.currentPreviewFile = null;
+    }
+
+    function downloadCurrentPreview() {
+      if (!window.currentPreviewFile) return;
+      downloadSingleFile(window.currentPreviewFile);
+    }
+
+    function downloadSingleFile(file) {
+      const blob = new Blob([file.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadSelected() {
+      const toDownload = allFiles.filter(f => selected.has(f.path));
+      if (toDownload.length === 0) {
+        alert("Selecione pelo menos um arquivo.");
+        return;
+      }
+
+      if (toDownload.length === 1) {
+        // Download raw, no zip
+        downloadSingleFile(toDownload[0]);
+      } else {
+        // Multiple → ZIP
+        downloadAsZip(toDownload);
+      }
+    }
+
+    async function downloadAsZip(files) {
+      if (!window.JSZip) {
+        await new Promise((resolve) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          s.onload = resolve;
+          document.head.appendChild(s);
+        });
+      }
+
+      const zip = new JSZip();
+      files.forEach(f => zip.file(f.path, f.content));
+
+      const blob = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `projeto_restaurado_${new Date().toISOString().slice(0,10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function resetAll() {
+      allFiles = [];
+      selected.clear();
+      expandedFolders.clear();
+      document.getElementById('fileInfo').classList.add('hidden');
+      document.getElementById('uploadArea').classList.remove('hidden');
+      document.getElementById('treeContainer').innerHTML = '';
+      document.getElementById('fileInput').value = '';
+      window.currentPreviewFile = null;
+    }
+
+    // Keyboard: press / to focus upload
+    document.addEventListener('keydown', function(e) {
+      if (e.key === '/' && document.activeElement.tagName === 'BODY') {
+        e.preventDefault();
+        document.getElementById('fileInput').click();
+      }
+    });
+
+    window.onload = init;
+  </script>
+</body>
+</html>
