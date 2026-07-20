@@ -19,6 +19,32 @@
   --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1);
   --tab-h:36px;--header-h:48px;
 }
+
+/* TEMA ESCURO */
+body.dark-mode{
+  --primary:#3b82f6;--primary-dark:#2563eb;--primary-light:#1e3a8a;
+  --success:#22c55e;--success-light:#14532d;
+  --warn:#f59e0b;--warn-light:#78350f;
+  --danger:#ef4444;--danger-light:#7f1d1d;
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;
+  --border:#475569;--text:#e2e8f0;--text2:#94a3b8;
+}
+/* Ajustes cirúrgicos para elementos com cores fixas no tema escuro */
+body.dark-mode .cl-item.checked,
+body.dark-mode .tree-item.checked { background: rgba(34, 197, 94, 0.2); }
+body.dark-mode .tree-item.partial { background: rgba(245, 158, 11, 0.2); }
+body.dark-mode #counter-bar { color: #86efac; border-color: rgba(34, 197, 94, 0.5); }
+body.dark-mode #counter-bar #token-estimate { color: #86efac; opacity: 0.8; }
+body.dark-mode #btn-start { color: #86efac; border-color: var(--success); background: rgba(34, 197, 94, 0.15); }
+body.dark-mode #btn-start:hover { background: rgba(34, 197, 94, 0.3); }
+body.dark-mode #btn-clear { color: #fcd34d; border-color: var(--warn); background: rgba(245, 158, 11, 0.15); }
+body.dark-mode #btn-clear:hover { background: rgba(245, 158, 11, 0.3); }
+body.dark-mode #btn-clip { color: #93c5fd; background: rgba(59, 130, 246, 0.15); border-color: var(--primary); }
+body.dark-mode #btn-clip:hover { background: rgba(59, 130, 246, 0.3); }
+body.dark-mode .modal-box { background: var(--surface); }
+body.dark-mode #loading-overlay { background: rgba(15, 23, 42, 0.85); }
+body.dark-mode .prev-item.ign { background: rgba(239, 68, 68, 0.1); }
+
 html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;background:var(--bg);color:var(--text);}
 
 /* ============================================================
@@ -397,8 +423,9 @@ textarea.txt-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
 
   <!-- HEADER -->
   <div id="header">
-    <h1>📁 Copiador de Código v2.0</h1>
+    <h1>📁 Copiador de Código v2.1</h1>
     <div id="header-right">
+      <button id="theme-toggle" onclick="toggleTheme()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;">🌙</button>
       <span id="file-count-badge">0 arquivos</span>
       <span id="header-status">Pronto</span>
     </div>
@@ -851,7 +878,7 @@ function giMatches(relPath){
 // ============================================================
 function pickSourceDir(){ $id('src-picker').click(); }
 
-$id('src-picker').addEventListener('change',function(e){
+ $id('src-picker').addEventListener('change',function(e){
   const files=Array.from(e.target.files);
   if(!files.length) return;
   loadMetadata(files);
@@ -1496,8 +1523,33 @@ document.addEventListener('keydown',e=>{
 });
 
 // ============================================================
+// THEME TOGGLE & SAVE
+// ============================================================
+function applyTheme(theme) {
+  document.body.classList.toggle('dark-mode', theme === 'dark');
+  const btn = document.getElementById('theme-toggle');
+  if (btn) {
+    btn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  }
+}
+function toggleTheme() {
+  const isDark = document.body.classList.contains('dark-mode');
+  const newTheme = isDark ? 'light' : 'dark';
+  applyTheme(newTheme);
+  try {
+    localStorage.setItem('theme', newTheme);
+    log(`Tema alterado para ${newTheme}.`, 'info');
+  } catch(e) { /* ignore storage errors */ }
+}
+
+// ============================================================
 // INIT
 // ============================================================
+try {
+  const savedTheme = localStorage.getItem('theme') || 'light';
+  applyTheme(savedTheme);
+} catch(e) { applyTheme('light'); }
+
 log('Bem-vindo ao Copiador de Código v2.0 — HTML Edition.','info');
 log('Selecione uma pasta de entrada para começar.','info');
 updateCounter();
