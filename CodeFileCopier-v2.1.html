@@ -157,6 +157,11 @@ select.sort-sel{
 .cl-item-text{font-size:11px;word-break:break-all;line-height:1.4;}
 .cl-item-sub{font-size:10px;color:var(--text2);}
 .cl-empty{padding:20px;text-align:center;color:var(--text2);font-size:12px;}
+.ext-header{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface2);border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0;user-select:none;}
+.ext-h-col{cursor:pointer;transition:color .15s;white-space:nowrap;}
+.ext-h-col:hover{color:var(--primary);}
+.ext-h-col.sort-asc::after{content:' ▲';}
+.ext-h-col.sort-desc::after{content:' ▼';}
 
 /* ============================================================
    BUTTON ROWS
@@ -507,6 +512,7 @@ textarea.txt-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
         <label>🔍</label>
         <input class="search-input" id="ext-search" placeholder="Filtrar extensões…" oninput="renderExtList()">
       </div>
+      <div class="ext-header" id="ext-header"><span style="width:18px;flex-shrink:0"></span><span class="ext-h-col" data-col="ext" onclick="sortExtBy('ext')" style="flex:1">Extensão</span><span class="ext-h-col" data-col="size" onclick="sortExtBy('size')" style="margin-left:auto">Tamanho</span><span class="ext-h-col" data-col="count" onclick="sortExtBy('count')" style="margin-left:12px">Arquivos</span></div>
       <div class="checklist" id="ext-list"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
       <div class="btn-row">
         <button class="btn-sm" onclick="selAllExt()">✅ Tudo</button>
@@ -700,6 +706,7 @@ const S = {
   logCollapsed: false,
   configCollapsed: false,
   cancelFlag: false,    // para cancelar carregamento
+  extSort: { col: null, dir: 'asc' }, // ordenação da aba Extensões
 };
 
 // ============================================================
@@ -758,6 +765,12 @@ function shouldIgnoreGlobal(name){
   return S.ignorePatterns.some(p=>p.includes('*')?fnMatch(name,p):name===p);
 }
 function estimateTokens(chars){ return Math.ceil(chars/4); }
+function fmtSize(b){
+  if(b<1024) return b+' B';
+  if(b<1048576) return (b/1024).toFixed(1)+' KB';
+  if(b<1073741824) return (b/1048576).toFixed(1)+' MB';
+  return (b/1073741824).toFixed(1)+' GB';
+}
 function shouldIgnoreSize(size){
   if(!document.getElementById('size-filter-cb').checked) return false;
   const maxKb = Number(document.getElementById('max-size-kb').value)||500;
@@ -1037,18 +1050,35 @@ async function readFilesBatch(metas, onProgress){
 // ============================================================
 // RENDER: EXTENSIONS
 // ============================================================
+function sortExtBy(col){
+  if(S.extSort.col===col){S.extSort.dir=S.extSort.dir==='asc'?'desc':'asc';}
+  else{S.extSort.col=col;S.extSort.dir='asc';}
+  renderExtList();
+}
 function renderExtList(){
   const q=$id('ext-search').value.toLowerCase();
   const list=$id('ext-list');
-  const filtered=S.allExts.filter(e=>e.toLowerCase().includes(q));
+  let sorted=[...S.allExts];
+  if(S.extSort.col){
+    sorted.sort((a,b)=>{
+      let cmp=0;
+      if(S.extSort.col==='ext'){cmp=a.toLowerCase().localeCompare(b.toLowerCase());}
+      else if(S.extSort.col==='size'){const sa=S.allMeta.filter(m=>m.ext===a).reduce((s,m)=>s+m.size,0);const sb=S.allMeta.filter(m=>m.ext===b).reduce((s,m)=>s+m.size,0);cmp=sa-sb;}
+      else if(S.extSort.col==='count'){const ca=S.allMeta.filter(m=>m.ext===a).length;const cb=S.allMeta.filter(m=>m.ext===b).length;cmp=ca-cb;}
+      return S.extSort.dir==='asc'?cmp:-cmp;
+    });
+  }else{sorted=sortArr(S.allExts);}
+  const filtered=sorted.filter(e=>e.toLowerCase().includes(q));
   if(!filtered.length){list.innerHTML='<div class="cl-empty">Nenhuma extensão encontrada.</div>';return;}
   list.innerHTML='';
   filtered.forEach(ext=>{
-    const count=S.allMeta.filter(m=>m.ext===ext).length;
+    const group=S.allMeta.filter(m=>m.ext===ext);
+    const count=group.length;
+    const totalSize=group.reduce((s,m)=>s+m.size,0);
     const sel=S.selectedExts.has(ext);
     const d=document.createElement('div');
     d.className='cl-item'+(sel?' checked':'');
-    d.innerHTML=`<input type="checkbox"${sel?' checked':''}><span class="cl-item-text${BINARY_EXTS.has(ext)?' binary-name':''}">${esc(ext)}${BINARY_EXTS.has(ext)?'<span class="binary-badge">(binário)</span>':''}</span><span class="cl-item-sub">${count} arq.</span>`;
+    d.innerHTML=`<input type="checkbox"${sel?' checked':''}><span class="cl-item-text${BINARY_EXTS.has(ext)?' binary-name':''}">${esc(ext)}${BINARY_EXTS.has(ext)?'<span class="binary-badge">(binário)</span>':''}</span><span class="cl-item-sub" style="margin-left:auto">${fmtSize(totalSize)}</span><span class="cl-item-sub">${count} arq.</span>`;
     d.querySelector('input').onchange=ev=>{
       if(ev.target.checked){S.selectedExts.add(ext);d.classList.add('checked');}
       else{S.selectedExts.delete(ext);d.classList.remove('checked');}
@@ -1057,6 +1087,7 @@ function renderExtList(){
     list.appendChild(d);
   });
   $id('ext-counter').textContent=`${S.selectedExts.size} sel.`;
+  const hdr=$id('ext-header');if(hdr){hdr.querySelectorAll('.ext-h-col').forEach(el=>{el.classList.remove('sort-asc','sort-desc');if(el.dataset.col===S.extSort.col)el.classList.add('sort-'+S.extSort.dir);});}
 }
 function selAllExt(){S.allExts.forEach(e=>S.selectedExts.add(e));renderExtList();}
 function deselAllExt(){S.selectedExts.clear();renderExtList();}
