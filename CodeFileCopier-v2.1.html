@@ -1233,6 +1233,11 @@ function getAllFilesInNode(node){
   Object.values(node.ch).forEach(c=>f=f.concat(getAllFilesInNode(c)));
   return f;
 }
+function getDirSize(node){
+  let s=node.files.reduce((a,m)=>a+m.size,0);
+  Object.values(node.ch).forEach(c=>s+=getDirSize(c));
+  return s;
+}
 function renderTreeNode(node,container){
   const dirs=Object.keys(node.ch).sort((a,b)=>natKey(a)<natKey(b)?-1:1);
   dirs.forEach(dk=>{
@@ -1258,7 +1263,8 @@ function renderTreeNode(node,container){
     const cls=selC===0?'':selC===allF.length?' checked':' partial';
     const icon=selC===0?'☐':selC===allF.length?'☑':'⊟';
     item.className=`tree-item${cls}`;
-    item.innerHTML=`<span class="tree-toggle">${treeChevron(false)}</span><span class="tree-icon">${icon}</span><span class="tree-label dir">${esc(dk)}</span>`;
+    const dirSize=fmtSize(getDirSize(child));
+    item.innerHTML=`<span class="tree-toggle">${treeChevron(false)}</span><span class="tree-icon">${icon}</span><span class="tree-label dir">${esc(dk)}</span><span class="cl-item-sub" style="margin-left:auto;white-space:nowrap">${dirSize}</span>`;
 
     const tog=item.querySelector('.tree-toggle');
     const childDiv=document.createElement('div');
