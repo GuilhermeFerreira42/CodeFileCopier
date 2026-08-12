@@ -609,7 +609,7 @@ class CodeCopierApp(_BaseTk):
         # bordas da janela), evitando que botões como "INICIAR CÓPIA"
         # fiquem fora da área visível em telas pequenas. Em telas grandes,
         # continua abrindo no tamanho padrão de sempre (1180x820).
-        default_w, default_h = 1180, 820
+        default_w, default_h = 640, 820
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
         win_w = min(default_w, max(640, screen_w - 60))
