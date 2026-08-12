@@ -37,6 +37,24 @@ Todas as funcionalidades da versão HTML foram preservadas:
 ==================================================================
 """
 
+"""
+==================================================================
+ AJUSTES DE RESPONSIVIDADE (v3.2)
+==================================================================
+- Alturas fixas removidas de Treeviews, Listboxes e campos de texto
+  para permitir expansão dinâmica conforme o tamanho da janela.
+- O layout agora distribui o espaço vertical de forma inteligente:
+  o Notebook (abas) ocupa todo o espaço disponível, enquanto os
+  painéis de configuração, ações e log mantêm proporções mínimas.
+- Layout principal em pack: notebook (único expand=True) absorve todo espaço extra.
+- Frames fixos (header, config, counter, actions, log, status) drasticamente compactados.
+- Reduzido minsize para 640x400, permitindo uso em telas menores.
+- Todos os componentes internos acompanham o redimensionamento
+  sem necessidade de scrollbars.
+==================================================================
+"""
+
+
 import os
 import re
 import io
@@ -564,7 +582,10 @@ class OutputDialog(tk.Toplevel):
         if not path:
             return
         try:
-            with open(path, 'w', encoding='utf-8') as f:
+            # newline='\n' força LF puro na saída, independente do SO,
+            # evitando que o Windows converta para \r\n e quebre o
+            # casamento de padrões dos restauradores.
+            with open(path, 'w', encoding='utf-8', newline='\n') as f:
                 f.write(self.content)
             self.app.toast('Download concluído!', 'ok')
             self.app.log(f"Download: {path}", 'ok')
@@ -582,8 +603,25 @@ class CodeCopierApp(_BaseTk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("1180x820")
-        self.minsize(760, 560)
+
+        # Tamanho inicial adaptado à tela do usuário: nunca abre maior do
+        # que a tela disponível (com uma margem para a barra de tarefas e
+        # bordas da janela), evitando que botões como "INICIAR CÓPIA"
+        # fiquem fora da área visível em telas pequenas. Em telas grandes,
+        # continua abrindo no tamanho padrão de sempre (1180x820).
+        default_w, default_h = 1180, 820
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        win_w = min(default_w, max(640, screen_w - 60))
+        win_h = min(default_h, max(480, screen_h - 100))
+        x = max((screen_w - win_w) // 2, 0)
+        y = max((screen_h - win_h) // 2 - 20, 0)
+        self.geometry(f"{win_w}x{win_h}+{x}+{y}")
+
+        # minsize também reduzido, para permitir redimensionar a janela
+        # manualmente para baixo em telas pequenas sem travar num tamanho
+        # que já não cabe.
+        self.minsize(640, 400)
 
         # ---------------- ESTADO ----------------
         cfg = load_config()
@@ -765,12 +803,12 @@ class CodeCopierApp(_BaseTk):
     # CONSTRUÇÃO DA UI
     # ---------------------------------------------------------
     def _build_ui(self):
-        outer = ttk.Frame(self, padding=8)
+        outer = ttk.Frame(self, padding=4)
         outer.pack(fill='both', expand=True)
 
         self._build_header(outer)
         self._build_config(outer)
-        self._build_tabs(outer)
+        self._build_tabs(outer)      # notebook: fill='both', expand=True
         self._build_counter(outer)
         self._build_progress(outer)
         self._build_actions(outer)
@@ -778,8 +816,9 @@ class CodeCopierApp(_BaseTk):
         self._build_statusbar(outer)
 
     def _build_header(self, parent):
-        self.header_frame = ttk.Frame(parent, style='Header.TFrame', padding=(12, 8))
-        self.header_frame.pack(fill='x', pady=(0, 6))
+        self.header_frame = ttk.Frame(parent, style='Header.TFrame', padding=(8, 4))
+        self.header_frame.pack(fill='x', pady=(0, 2))
+        # retornar para posicionamento no grid principal
         ttk.Label(self.header_frame, text="📁 Copiador de Código — Python Edition",
                   style='Header.TLabel', font=('', 12, 'bold')).pack(side='left')
         right = ttk.Frame(self.header_frame, style='Header.TFrame')
@@ -792,10 +831,11 @@ class CodeCopierApp(_BaseTk):
         self.file_count_badge.pack(side='left', padx=(0, 10))
         self.header_status = ttk.Label(right, text="Pronto", style='Header.TLabel')
         self.header_status.pack(side='left')
+        return self.header_frame
 
     def _build_config(self, parent):
-        cfgf = ttk.LabelFrame(parent, text="⚙ Configurações", padding=8)
-        cfgf.pack(fill='x', pady=(0, 6))
+        cfgf = ttk.LabelFrame(parent, text="⚙ Configurações", padding=4)
+        cfgf.pack(fill='x', pady=(0, 2))
 
         # Zona de arrastar-e-soltar: arraste uma pasta ou um .zip aqui.
         if DND_AVAILABLE:
@@ -810,7 +850,7 @@ class CodeCopierApp(_BaseTk):
                       foreground='#d97706').pack(fill='x', pady=(2, 4))
 
         row1 = ttk.Frame(cfgf)
-        row1.pack(fill='x', pady=2)
+        row1.pack(fill='x', pady=1)
         ttk.Label(row1, text="📂 Entrada:", width=12).pack(side='left')
         self.src_input_var = tk.StringVar()
         self.src_input_entry = ttk.Entry(row1, textvariable=self.src_input_var, state='readonly')
@@ -819,13 +859,13 @@ class CodeCopierApp(_BaseTk):
         ttk.Button(row1, text="ZIP…", command=self.pick_zip).pack(side='left', padx=2)
 
         row2 = ttk.Frame(cfgf)
-        row2.pack(fill='x', pady=2)
+        row2.pack(fill='x', pady=1)
         ttk.Label(row2, text="💾 Saída:", width=12).pack(side='left')
         self.out_name_var = tk.StringVar(value="codigo_completo.txt")
         ttk.Entry(row2, textvariable=self.out_name_var).pack(side='left', fill='x', expand=True, padx=6)
 
         row3 = ttk.Frame(cfgf)
-        row3.pack(fill='x', pady=2)
+        row3.pack(fill='x', pady=1)
         ttk.Label(row3, text="Ordem:").pack(side='left')
         self.sort_var = tk.StringVar(value='Natural')
         sort_combo = ttk.Combobox(row3, textvariable=self.sort_var, state='readonly',
@@ -844,10 +884,11 @@ class CodeCopierApp(_BaseTk):
         ttk.Label(row3, text="KB").pack(side='left')
 
         self.config_frame = cfgf
+        return self.config_frame
 
     def _build_tabs(self, parent):
         self.notebook = ttk.Notebook(parent)
-        self.notebook.pack(fill='both', expand=True, pady=(0, 6))
+        self.notebook.pack(fill='both', expand=True, pady=(0, 2))
         self.notebook.bind('<<NotebookTabChanged>>', self._on_tab_changed)
 
         self.tab_frames = {}
@@ -862,6 +903,7 @@ class CodeCopierApp(_BaseTk):
         self._build_tab_explorer(self.tab_frames['explorer'])
         self._build_tab_arb(self.tab_frames['arb'])
         self._build_tab_gi(self.tab_frames['gi'])
+        return self.notebook
 
     def _on_tab_changed(self, event):
         idx = self.notebook.index(self.notebook.select())
@@ -881,7 +923,7 @@ class CodeCopierApp(_BaseTk):
         ttk.Entry(search_row, textvariable=self.ext_search_var).pack(side='left', fill='x', expand=True, padx=6)
 
         cols = ('sel', 'ext', 'size', 'count')
-        self.ext_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none', height=14)
+        self.ext_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none')
         self.ext_tree.heading('sel', text='')
         self.ext_tree.heading('ext', text='Extensão', command=lambda: self.sort_ext_by('ext'))
         self.ext_tree.heading('size', text='Tamanho', command=lambda: self.sort_ext_by('size'))
@@ -978,7 +1020,7 @@ class CodeCopierApp(_BaseTk):
         ttk.Entry(search_row, textvariable=self.file_search_var).pack(side='left', fill='x', expand=True, padx=6)
 
         cols = ('sel', 'name', 'dir', 'size')
-        self.file_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none', height=14)
+        self.file_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none')
         self.file_tree.heading('sel', text='')
         self.file_tree.heading('name', text='Arquivo')
         self.file_tree.heading('dir', text='Pasta')
@@ -1043,7 +1085,7 @@ class CodeCopierApp(_BaseTk):
     def _build_tab_search(self, parent):
         ttk.Label(parent, text="Cole nomes, caminhos ou saída de git status:",
                   foreground='#64748b').pack(anchor='w', pady=(0, 4))
-        self.txt_search = tk.Text(parent, height=4)
+        self.txt_search = tk.Text(parent, height=2)
         self.txt_search.pack(fill='x', pady=(0, 4))
 
         btn_row = ttk.Frame(parent)
@@ -1053,7 +1095,7 @@ class CodeCopierApp(_BaseTk):
         ttk.Button(btn_row, text="⬜ Nenhum", command=self.desel_all_search).pack(side='left')
 
         cols = ('sel', 'path')
-        self.search_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none', height=12)
+        self.search_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none')
         self.search_tree.heading('sel', text='')
         self.search_tree.heading('path', text='Caminho')
         self.search_tree.column('sel', width=32, anchor='center', stretch=False)
@@ -1126,7 +1168,7 @@ class CodeCopierApp(_BaseTk):
         ttk.Button(top, text="Expandir tudo", command=self.expand_all_tree).pack(side='right', padx=(4, 0))
         ttk.Button(top, text="Recolher tudo", command=self.collapse_all_tree).pack(side='right')
 
-        self.explorer_tree = ttk.Treeview(parent, show='tree', selectmode='none', height=20)
+        self.explorer_tree = ttk.Treeview(parent, show='tree', selectmode='none')
         self.explorer_tree.pack(fill='both', expand=True)
         self.explorer_tree.bind('<Button-1>', self._on_explorer_click)
 
@@ -1271,7 +1313,7 @@ class CodeCopierApp(_BaseTk):
                       foreground='#d97706').pack(fill='x', pady=(0, 6))
 
         cols = ('sel', 'name', 'size')
-        self.arb_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none', height=14)
+        self.arb_tree = ttk.Treeview(parent, columns=cols, show='headings', selectmode='none')
         self.arb_tree.heading('sel', text='')
         self.arb_tree.heading('name', text='Arquivo')
         self.arb_tree.heading('size', text='Tamanho')
@@ -1363,7 +1405,7 @@ class CodeCopierApp(_BaseTk):
         left = ttk.Frame(split)
         left.pack(side='left', fill='both', expand=True, padx=(0, 6))
         ttk.Label(left, text="Regras:", font=('', 9, 'bold')).pack(anchor='w')
-        self.gi_rules_list = tk.Listbox(left, height=16, exportselection=False)
+        self.gi_rules_list = tk.Listbox(left, exportselection=False)
         self.gi_rules_list.pack(fill='both', expand=True, pady=(2, 4))
         self.gi_rules_list.bind('<<ListboxSelect>>', self._on_gi_rule_select)
         add_row = ttk.Frame(left)
@@ -1378,7 +1420,7 @@ class CodeCopierApp(_BaseTk):
         right = ttk.Frame(split)
         right.pack(side='left', fill='both', expand=True)
         ttk.Label(right, text="Preview:", font=('', 9, 'bold')).pack(anchor='w')
-        self.gi_preview = tk.Listbox(right, height=16)
+        self.gi_preview = tk.Listbox(right)
         self.gi_preview.pack(fill='both', expand=True, pady=(2, 4))
         ttk.Button(right, text="🔄 Atualizar", command=self.refresh_gi_preview).pack(anchor='w')
 
@@ -1438,13 +1480,15 @@ class CodeCopierApp(_BaseTk):
     # CONTADOR / PROGRESSO / AÇÕES / LOG / STATUS
     # ---------------------------------------------------------
     def _build_counter(self, parent):
-        bar = ttk.Frame(parent, padding=(8, 4))
+        bar = ttk.Frame(parent, padding=(4, 2))
         bar.pack(fill='x')
+        self.counter_frame = bar
         self.counter_text_lbl = ttk.Label(bar, text="0 arquivo(s) selecionado(s) | ~0 linhas",
                                            foreground='#16a34a', font=('', 9, 'bold'))
         self.counter_text_lbl.pack(side='left')
         self.token_estimate_lbl = ttk.Label(bar, text="~0 tokens estimados", foreground='#16a34a')
         self.token_estimate_lbl.pack(side='right')
+        return bar
 
     def _build_progress(self, parent):
         self.progress_wrap = ttk.Frame(parent)
@@ -1455,12 +1499,13 @@ class CodeCopierApp(_BaseTk):
         self.prog_pct_lbl = ttk.Label(info, text="0%")
         self.prog_pct_lbl.pack(side='right')
         self.progressbar = ttk.Progressbar(self.progress_wrap, mode='determinate')
-        self.progressbar.pack(fill='x', pady=(2, 6))
-        # não empacotado por padrão; exibido sob demanda via set_progress()
+        self.progressbar.pack(fill='x', pady=(2, 4))
+        return self.progress_wrap
 
     def _build_actions(self, parent):
-        row = ttk.Frame(parent, padding=(0, 4))
+        row = ttk.Frame(parent, padding=(0, 2))
         row.pack(fill='x')
+        self.actions_frame = row
         self.btn_start = tk.Button(row, text="▶ INICIAR CÓPIA", command=self.start_copy,
                                     bg='#dcfce7', fg='#15803d', relief='flat', font=('', 10, 'bold'),
                                     activebackground='#bbf7d0', padx=10, pady=6)
@@ -1471,11 +1516,12 @@ class CodeCopierApp(_BaseTk):
         self.btn_clip = tk.Button(row, text="📋 Clipboard", command=self.clipboard_copy_last,
                                    bg='#dbeafe', fg='#1d4ed8', relief='flat', padx=10, pady=6)
         self.btn_clip.pack(side='left', padx=(4, 0))
+        return row
 
     def _build_log(self, parent):
-        wrap = ttk.LabelFrame(parent, text="📋 Log")
-        wrap.pack(fill='x', pady=(4, 4))
-        head = ttk.Frame(wrap)
+        self.log_frame = ttk.LabelFrame(parent, text="📋 Log")
+        self.log_frame.pack(fill='x', pady=(0, 1))
+        head = ttk.Frame(self.log_frame)
         head.pack(fill='x')
         self.log_badge_lbl = ttk.Label(head, text="0", background='#2563eb', foreground='white',
                                         padding=(6, 0))
@@ -1485,27 +1531,29 @@ class CodeCopierApp(_BaseTk):
         ttk.Checkbutton(head, text="mostrar", variable=self.log_visible,
                          command=self._toggle_log_visibility).pack(side='right', padx=2)
 
-        self.log_text = tk.Text(wrap, height=6, bg='#0f172a', fg='#94a3b8',
+        self.log_text = tk.Text(self.log_frame, height=2, bg='#0f172a', fg='#94a3b8',
                                  font=('Courier New', 9), state='disabled')
         self.log_text.pack(fill='both', expand=True)
         self.log_text.tag_configure('ok', foreground='#4ade80')
         self.log_text.tag_configure('warn', foreground='#fbbf24')
         self.log_text.tag_configure('err', foreground='#f87171')
         self.log_text.tag_configure('info', foreground='#60a5fa')
+        return self.log_frame
 
     def _toggle_log_visibility(self):
         if self.log_visible.get():
-            self.log_text.pack(fill='both', expand=True)
+            self.log_frame.pack(fill='x', pady=(0, 1), before=self.statusbar_frame)
         else:
-            self.log_text.pack_forget()
+            self.log_frame.pack_forget()
 
     def _build_statusbar(self, parent):
-        bar = ttk.Frame(parent, padding=(2, 2))
-        bar.pack(fill='x')
-        self.st_left_lbl = ttk.Label(bar, text="Pronto", foreground='#64748b')
+        self.statusbar_frame = ttk.Frame(parent, padding=(2, 1))
+        self.statusbar_frame.pack(fill='x')
+        self.st_left_lbl = ttk.Label(self.statusbar_frame, text="Pronto", foreground='#64748b')
         self.st_left_lbl.pack(side='left')
-        self.st_right_lbl = ttk.Label(bar, text="v3.0 — Python Edition", foreground='#64748b')
+        self.st_right_lbl = ttk.Label(self.statusbar_frame, text="v3.0 — Python Edition", foreground='#64748b')
         self.st_right_lbl.pack(side='right')
+        return self.statusbar_frame
 
     # ---------------------------------------------------------
     # LOG / TOAST / STATUS
@@ -1554,7 +1602,7 @@ class CodeCopierApp(_BaseTk):
             self.progressbar.stop()
             return
         if not self.progress_wrap.winfo_ismapped():
-            self.progress_wrap.pack(fill='x', pady=(0, 4), before=self.btn_start.master)
+            self.progress_wrap.pack(fill='x', pady=(0, 2), before=self.actions_frame)
         if val == 'pulse':
             self.progressbar.configure(mode='indeterminate')
             self.progressbar.start(12)
@@ -1916,14 +1964,32 @@ class CodeCopierApp(_BaseTk):
                 out = build_header(src_dir, len(metas), filters)
                 copied = 0
                 skipped = 0
+                # Salvaguarda preventiva: garante que cada arquivo (por
+                # caminho relativo) entre no loop no máximo uma vez, mesmo
+                # que `metas` contenha entradas duplicadas por algum motivo
+                # upstream (evita cabeçalhos repetidos no .txt gerado).
+                seen_rel_paths = set()
                 for m in metas:
+                    if m['rel_path'] in seen_rel_paths:
+                        continue
+                    seen_rel_paths.add(m['rel_path'])
                     content = content_map.get(m['rel_path'])
                     if content is None:
                         skipped += 1
                         continue
+                    # Normaliza (sem descartar) newlines finais do conteúdo
+                    # antes de acrescentar o separador fixo '\n\n'. O
+                    # restaurador assume que a fronteira entre blocos tem NO
+                    # MÁXIMO 2 '\n' de "sujeira" adicionados por ele (e
+                    # preserva 1 '\n' se o conteúdo original já terminava
+                    # nele) — por isso colapsamos runs de 2+ '\n' finais para
+                    # exatamente 1, em vez de usar rstrip puro, que apagaria
+                    # a quebra de linha final de praticamente todo arquivo de
+                    # texto bem formado (POSIX) e quebraria o round-trip.
+                    clean_content = re.sub(r'\n{2,}$', '\n', content)
                     sep = '=' * 42 + '\n'
                     out += sep + f"Conteúdo de {m['name']} (caminho: {m['rel_path']}) [enc: utf-8]:\n" + sep
-                    out += content + '\n\n'
+                    out += clean_content + '\n\n'
                     copied += 1
 
                 out += '\n' + '=' * 42 + '\nEstrutura de pastas:\n' + '=' * 42 + '\n'
@@ -1958,7 +2024,8 @@ class CodeCopierApp(_BaseTk):
             except OSError:
                 self.log(f"[IGNORADO] {f['name']}", 'warn')
                 continue
-            out += '=' * 42 + '\n' + f"Conteúdo de {f['name']}:\n" + '=' * 42 + '\n' + content + '\n\n'
+            clean_content = re.sub(r'\n{2,}$', '\n', content)
+            out += '=' * 42 + '\n' + f"Conteúdo de {f['name']}:\n" + '=' * 42 + '\n' + clean_content + '\n\n'
             n += 1
         out += '\n' + '=' * 42 + '\nArquivos:\n' + '=' * 42 + '\n'
         for f in files:

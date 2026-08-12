@@ -161,19 +161,84 @@
     }
 
     function parseFile(text) {
-      const SEP = '='.repeat(42);
-      const files = [];
-      const regex = new RegExp(SEP + '\\nConteúdo de (.+?) \\(caminho: (.+?)\\) \\[enc: utf-8\\]:\\n' + SEP + '\\n', 'g');
+      // Normaliza quebras de linha (arquivos gerados no Windows podem vir
+      // com \r\n, o que quebraria o casamento dos separadores).
+      text = text.replace(/\r\n/g, '\n');
 
-      let matches = [];
+      const SEP = '='.repeat(42);
+      const HEADER_RE = new RegExp(
+        SEP + '\\nConteúdo de (.+?) \\(caminho: (.+?)\\) \\[enc: utf-8\\]:\\n' + SEP + '\\n', 'g'
+      );
+      const FOOTER_MARKER = '\n' + SEP + '\nEstrutura de pastas:\n';
+
+      // Salvaguarda C: delimita o parsing à seção ANTES do marcador de
+      // rodapé "Estrutura de pastas:", se ele existir. Sem isso, texto
+      // solto na árvore final poderia ser interpretado como conteúdo.
+      const footerIdx = text.indexOf(FOOTER_MARKER);
+      const body = footerIdx !== -1 ? text.substring(0, footerIdx) : text;
+
+      // headerStart = início REAL do cabeçalho (m.index), não apenas o
+      // ponto logo após ele. Precisamos do início real do PRÓXIMO cabeçalho
+      // para delimitar corretamente o fim do conteúdo do arquivo atual —
+      // usar um deslocamento fixo (como SEP.length + 2) é incorreto, pois o
+      // comprimento do cabeçalho varia com o tamanho do nome/caminho do
+      // arquivo, e isso é o que causava fragmentos do próximo cabeçalho
+      // grudados no final do conteúdo anterior.
+      let rawMatches = [];
       let m;
-      while ((m = regex.exec(text)) !== null) {
-        matches.push({ name: m[1].trim(), path: m[2].trim(), start: regex.lastIndex });
+      while ((m = HEADER_RE.exec(body)) !== null) {
+        rawMatches.push({
+          name: m[1].trim(),
+          path: m[2].trim(),
+          headerStart: m.index,
+          contentStart: HEADER_RE.lastIndex,
+        });
       }
 
+      if (rawMatches.length === 0) return [];
+
+      // Salvaguarda A: consolida cabeçalhos duplicados consecutivos que
+      // apontam para o MESMO arquivo (mesmo caminho), quando só há espaço
+      // em branco entre eles — o anterior é um cabeçalho "fantasma" e só o
+      // último da sequência é válido. Não remove nada quando há qualquer
+      // conteúdo real entre eles (o que preservaria arquivos genuinamente
+      // vazios que apenas coincidem de vir antes de outro bloco).
+      let matches = [];
+      for (let i = 0; i < rawMatches.length; i++) {
+        const cur = rawMatches[i];
+        const next = rawMatches[i + 1];
+        if (next && next.path === cur.path) {
+          const between = body.substring(cur.contentStart, next.headerStart);
+          if (between.trim() === '') continue; // descarta o fantasma
+        }
+        matches.push(cur);
+      }
+
+      // Salvaguarda B: fragmento inequívoco de cabeçalho malformado que
+      // tenha sobrado grudado no final do conteúdo extraído, com ou sem o
+      // segundo separador.
+      const GHOST_RE = new RegExp(
+        '\\n' + SEP + '\\nConteúdo de .+? \\(caminho: .+?\\) \\[enc: utf-8\\]:\\n(?:' + SEP + '\\n?)?\\n?$'
+      );
+
+      const files = [];
       for (let i = 0; i < matches.length; i++) {
-        const end = matches[i+1] ? matches[i+1].start - (SEP.length + 2) : text.length;
-        let content = text.substring(matches[i].start, end).replace(/\n+$/, '');
+        const contentStart = matches[i].contentStart;
+        const contentEnd = matches[i + 1] ? matches[i + 1].headerStart : body.length;
+        let content = body.substring(contentStart, contentEnd);
+
+        const ghostMatch = content.match(GHOST_RE);
+        if (ghostMatch) {
+          content = content.substring(0, ghostMatch.index);
+        } else {
+          // Remove no máximo 2 '\n' finais (o separador de bloco fixo que o
+          // gerador escreve). NUNCA usar um regex guloso /\n+$/ aqui: isso
+          // apagaria também a quebra de linha final legítima de arquivos de
+          // texto normais.
+          if (content.endsWith('\n\n')) content = content.slice(0, -2);
+          else if (content.endsWith('\n')) content = content.slice(0, -1);
+        }
+
         files.push({ path: matches[i].path, name: matches[i].name, content });
       }
       return files;
