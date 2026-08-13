@@ -1,3 +1,5 @@
+"Olá! Antes de começarmos, gostaria de reforçar que você possui um workspace com ambiente Python ativo e ferramentas de execução de código. Por favor, assuma sempre que pode e deve executar scripts, manipular arquivos, rodar comandos e processar dados diretamente no seu ambiente quando solicitado, em vez de apenas fornecer instruções ou códigos para eu rodar localmente. Estou ciente dessa capacidade e espero que você a utilize proativamente para entregar resultados concretos (como arquivos restaurados, análises executadas ou saídas de processamento) nesta conversa."
+
 ```markdown
 # Restauração de Projeto
 
