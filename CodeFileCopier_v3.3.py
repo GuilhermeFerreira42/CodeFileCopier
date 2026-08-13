@@ -609,7 +609,7 @@ class CodeCopierApp(_BaseTk):
         # bordas da janela), evitando que botões como "INICIAR CÓPIA"
         # fiquem fora da área visível em telas pequenas. Em telas grandes,
         # continua abrindo no tamanho padrão de sempre (1180x820).
-        default_w, default_h = 640, 820
+        default_w, default_h = 820, 820
         screen_w = self.winfo_screenwidth()
         screen_h = self.winfo_screenheight()
         win_w = min(default_w, max(640, screen_w - 60))
@@ -1521,17 +1521,24 @@ class CodeCopierApp(_BaseTk):
     def _build_log(self, parent):
         self.log_frame = ttk.LabelFrame(parent, text="📋 Log")
         self.log_frame.pack(fill='x', pady=(0, 1))
+
+        # Cabeçalho do log (PERMANECE VISÍVEL) — fora do conteúdo que colapsa
         head = ttk.Frame(self.log_frame)
         head.pack(fill='x')
         self.log_badge_lbl = ttk.Label(head, text="0", background='#2563eb', foreground='white',
                                         padding=(6, 0))
         self.log_badge_lbl.pack(side='left', padx=(4, 4), pady=2)
         ttk.Button(head, text="limpar", command=self.clear_log).pack(side='right', padx=2)
+
+        # Checkbox de toggle FORA da área que some
         self.log_visible = tk.BooleanVar(value=True)
         ttk.Checkbutton(head, text="mostrar", variable=self.log_visible,
                          command=self._toggle_log_visibility).pack(side='right', padx=2)
 
-        self.log_text = tk.Text(self.log_frame, height=2, bg='#0f172a', fg='#94a3b8',
+        # Área do texto (ESTA é que vai colapsar/expandir)
+        self.log_text_frame = ttk.Frame(self.log_frame)
+        self.log_text_frame.pack(fill='both', expand=True)
+        self.log_text = tk.Text(self.log_text_frame, height=2, bg='#0f172a', fg='#94a3b8',
                                  font=('Courier New', 9), state='disabled')
         self.log_text.pack(fill='both', expand=True)
         self.log_text.tag_configure('ok', foreground='#4ade80')
@@ -1542,9 +1549,9 @@ class CodeCopierApp(_BaseTk):
 
     def _toggle_log_visibility(self):
         if self.log_visible.get():
-            self.log_frame.pack(fill='x', pady=(0, 1), before=self.statusbar_frame)
+            self.log_text_frame.pack(fill='both', expand=True)
         else:
-            self.log_frame.pack_forget()
+            self.log_text_frame.pack_forget()
 
     def _build_statusbar(self, parent):
         self.statusbar_frame = ttk.Frame(parent, padding=(2, 1))
