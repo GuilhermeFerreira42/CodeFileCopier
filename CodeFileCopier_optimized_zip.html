@@ -1,0 +1,3202 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Copiador de Código v2.3 — Otimizado + ZIP</title>
+<style>
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --primary:#2563eb;--primary-dark:#1d4ed8;--primary-light:#dbeafe;
+  --success:#16a34a;--success-light:#dcfce7;
+  --warn:#d97706;--warn-light:#fef3c7;
+  --danger:#dc2626;--danger-light:#fee2e2;
+  --bg:#f1f5f9;--surface:#ffffff;--surface2:#f8fafc;
+  --border:#e2e8f0;--text:#1e293b;--text2:#64748b;
+  --radius:8px;--shadow:0 1px 3px rgba(0,0,0,.1);
+  --tab-h:36px;--header-h:48px;
+}
+
+/* TEMA ESCURO */
+body.dark-mode{
+  --primary:#3b82f6;--primary-dark:#2563eb;--primary-light:#1e3a8a;
+  --success:#22c55e;--success-light:#14532d;
+  --warn:#f59e0b;--warn-light:#78350f;
+  --danger:#ef4444;--danger-light:#7f1d1d;
+  --bg:#0f172a;--surface:#1e293b;--surface2:#334155;
+  --border:#475569;--text:#e2e8f0;--text2:#94a3b8;
+}
+/* Ajustes cirúrgicos para elementos com cores fixas no tema escuro */
+body.dark-mode .cl-item.checked,
+body.dark-mode .tree-item.checked { background: rgba(34, 197, 94, 0.2); }
+body.dark-mode .tree-item.partial { background: rgba(245, 158, 11, 0.2); }
+body.dark-mode #counter-bar { color: #86efac; border-color: rgba(34, 197, 94, 0.5); }
+body.dark-mode #counter-bar #token-estimate { color: #86efac; opacity: 0.8; }
+body.dark-mode #btn-start { color: #86efac; border-color: var(--success); background: rgba(34, 197, 94, 0.15); }
+body.dark-mode #btn-start:hover { background: rgba(34, 197, 94, 0.3); }
+body.dark-mode #btn-clear { color: #fcd34d; border-color: var(--warn); background: rgba(245, 158, 11, 0.15); }
+body.dark-mode #btn-clear:hover { background: rgba(245, 158, 11, 0.3); }
+body.dark-mode #btn-clip { color: #93c5fd; background: rgba(59, 130, 246, 0.15); border-color: var(--primary); }
+body.dark-mode #btn-clip:hover { background: rgba(59, 130, 246, 0.3); }
+body.dark-mode .modal-box { background: var(--surface); }
+body.dark-mode #loading-overlay { background: rgba(15, 23, 42, 0.85); }
+body.dark-mode .prev-item.ign { background: rgba(239, 68, 68, 0.1); }
+
+html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;font-size:13px;background:var(--bg);color:var(--text);}
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   ============================================================ */
+#app{display:flex;flex-direction:column;height:100vh;max-width:1200px;margin:0 auto;padding:8px;gap:6px;overflow:hidden;}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+#header{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--primary);color:#fff;
+  padding:0 14px;height:var(--header-h);border-radius:var(--radius);
+  flex-shrink:0;
+}
+#header h1{font-size:14px;font-weight:700;}
+#header-right{display:flex;align-items:center;gap:10px;font-size:11px;opacity:.85;}
+#file-count-badge{
+  background:rgba(255,255,255,.2);padding:2px 8px;border-radius:12px;
+  font-weight:600;white-space:nowrap;
+}
+
+/* ============================================================
+   DIRS + OPTIONS (COLAPSÁVEL NO MOBILE)
+   ============================================================ */
+#config-section{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);flex-shrink:0;}
+#config-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;cursor:pointer;user-select:none;
+}
+#config-header span{font-weight:600;font-size:12px;color:var(--text2);}
+#config-toggle{font-size:11px;color:var(--text2);}
+#config-body{padding:8px 12px 10px;display:flex;flex-direction:column;gap:6px;}
+#config-body.collapsed{display:none;}
+
+.dir-row{display:flex;align-items:center;gap:6px;}
+.dir-label{font-size:11px;font-weight:600;color:var(--text2);min-width:55px;}
+.dir-input{
+  flex:1;padding:5px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:12px;background:var(--surface2);
+  color:var(--text);min-width:0;
+}
+.dir-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+.btn-browse{
+  padding:5px 10px;background:var(--primary);color:#fff;
+  border:none;border-radius:6px;cursor:pointer;font-size:11px;
+  white-space:nowrap;flex-shrink:0;
+}
+.btn-browse:hover{background:var(--primary-dark);}
+
+.opts-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+.opts-row label{font-size:11px;color:var(--text2);font-weight:600;}
+select.sort-sel{
+  padding:4px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:11px;background:var(--surface);
+}
+.cb-label{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;color:var(--text);}
+.cb-label input{cursor:pointer;accent-color:var(--primary);}
+
+/* ============================================================
+   TABS
+   ============================================================ */
+#tabs-nav{display:flex;gap:2px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+#tabs-nav::-webkit-scrollbar{display:none;}
+.tab-btn{
+  padding:0 12px;height:var(--tab-h);background:var(--surface);
+  border:1px solid var(--border);border-bottom:none;
+  border-radius:6px 6px 0 0;cursor:pointer;font-size:11px;
+  color:var(--text2);white-space:nowrap;transition:all .15s;flex-shrink:0;
+}
+.tab-btn:hover{background:var(--primary-light);color:var(--primary);}
+.tab-btn.active{background:var(--primary);color:#fff;font-weight:600;border-color:var(--primary);}
+
+/* ============================================================
+   TAB CONTENT
+   ============================================================ */
+#tab-area{
+  flex:1;background:var(--surface);border:1px solid var(--border);
+  border-radius:0 var(--radius) var(--radius) var(--radius);
+  display:flex;flex-direction:column;overflow:hidden;min-height:0;
+}
+.tab-pane{display:none;flex-direction:column;gap:8px;padding:10px;flex:1;overflow:hidden;min-height:0;}
+.tab-pane.active{display:flex;}
+
+/* ============================================================
+   SEARCH ROW
+   ============================================================ */
+.search-row{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.search-row label{font-size:11px;font-weight:600;color:var(--text2);min-width:50px;}
+.search-input{
+  flex:1;padding:5px 8px;border:1px solid var(--border);
+  border-radius:6px;font-size:12px;background:var(--surface2);min-width:0;
+}
+.search-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+
+/* ============================================================
+   CHECKLIST
+   ============================================================ */
+.checklist{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.cl-item{
+  display:flex;align-items:center;gap:8px;padding:5px 10px;
+  cursor:pointer;border-bottom:1px solid var(--border);
+  transition:background .1s;user-select:none;
+}
+.cl-item:last-child{border-bottom:none;}
+.cl-item:hover{background:var(--primary-light);}
+.cl-item.checked{background:#f0fdf4;}
+.cl-item input[type=checkbox]{cursor:pointer;accent-color:var(--primary);flex-shrink:0;}
+.cl-item-text{font-size:11px;word-break:break-all;line-height:1.4;}
+.cl-item-sub{font-size:10px;color:var(--text2);}
+.cl-empty{padding:20px;text-align:center;color:var(--text2);font-size:12px;}
+
+/* ============================================================
+   BUTTON ROWS
+   ============================================================ */
+.btn-row{display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0;}
+.btn-sm{
+  padding:5px 10px;border:1px solid var(--border);background:var(--surface2);
+  border-radius:6px;cursor:pointer;font-size:11px;color:var(--text);
+  transition:all .15s;white-space:nowrap;
+}
+.btn-sm:hover{background:var(--border);border-color:#cbd5e1;}
+.btn-sm.primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+.btn-sm.primary:hover{background:var(--primary-dark);}
+.btn-sm.success{background:var(--success);color:#fff;border-color:var(--success);}
+.btn-sm.danger{background:var(--danger);color:#fff;border-color:var(--danger);}
+
+/* ============================================================
+   TREE EXPLORER
+   ============================================================ */
+.tree-wrap{flex:1;overflow:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);padding:4px;min-height:0;}
+.tree-node{line-height:1;}
+.tree-item{
+  display:flex;align-items:center;gap:4px;padding:4px 6px;
+  cursor:pointer;border-radius:4px;transition:background .1s;user-select:none;
+  min-height:28px;
+}
+.tree-item:hover{background:var(--primary-light);}
+.tree-item.checked{background:#f0fdf4;}
+.tree-item.partial{background:#fefce8;}
+.tree-toggle{font-size:9px;color:var(--text2);min-width:12px;cursor:pointer;padding:2px;}
+.tree-icon{font-size:12px;min-width:18px;text-align:center;}
+.tree-label{font-size:11px;word-break:break-all;}
+.tree-label.dir{color:var(--primary);font-weight:600;}
+.tree-children{padding-left:16px;}
+
+/* ============================================================
+   GITIGNORE
+   ============================================================ */
+.gi-split{display:flex;gap:8px;flex:1;min-height:0;overflow:hidden;}
+.gi-col{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;overflow:hidden;}
+.gi-rules{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.gi-rule{padding:3px 8px;font-size:11px;font-family:'Courier New',monospace;border-bottom:1px solid var(--border);cursor:pointer;}
+.gi-rule:hover{background:var(--primary-light);}
+.gi-rule.manual{color:#7c3aed;}
+.gi-rule.sel{background:var(--primary);color:#fff;}
+.gi-add{display:flex;gap:4px;flex-shrink:0;}
+.gi-add input{flex:1;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:11px;font-family:'Courier New',monospace;min-width:0;}
+.preview-wrap{flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:6px;background:var(--surface2);min-height:0;}
+.prev-item{padding:2px 8px;font-size:10px;font-family:'Courier New',monospace;border-bottom:1px solid var(--border);}
+.prev-item.ign{color:var(--danger);background:#fff5f5;}
+.prev-item.inc{color:var(--success);}
+.gi-status{font-size:11px;padding:4px 0;flex-shrink:0;}
+
+/* ============================================================
+   ARBITRARY FILES
+   ============================================================ */
+.arb-drop{
+  flex:1;overflow-y:auto;border:2px dashed var(--border);
+  border-radius:6px;background:var(--surface2);min-height:60px;
+  transition:all .2s;
+}
+.arb-drop.drag-over{border-color:var(--primary);background:var(--primary-light);}
+.arb-drop-hint{display:flex;align-items:center;justify-content:center;height:60px;color:var(--text2);font-size:12px;}
+.arb-item{display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border);}
+.arb-item input{accent-color:var(--primary);}
+.arb-item-name{font-size:11px;word-break:break-all;font-family:'Courier New',monospace;}
+.arb-item-size{font-size:10px;color:var(--text2);white-space:nowrap;}
+
+/* ============================================================
+   TEXT SEARCH
+   ============================================================ */
+textarea.txt-input{
+  width:100%;height:65px;padding:6px 8px;
+  border:1px solid var(--border);border-radius:6px;
+  font-family:'Courier New',monospace;font-size:11px;
+  resize:vertical;background:var(--surface2);flex-shrink:0;
+}
+textarea.txt-input:focus{outline:2px solid var(--primary);outline-offset:-1px;}
+
+/* ============================================================
+   COUNTER BAR
+   ============================================================ */
+#counter-bar{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--success-light);border:1px solid #86efac;
+  border-radius:6px;padding:5px 12px;flex-shrink:0;
+}
+#counter-text{font-size:11px;font-weight:700;color:#166534;font-family:'Courier New',monospace;}
+#token-estimate{font-size:10px;color:#166534;opacity:.8;}
+
+/* ============================================================
+   PROGRESS
+   ============================================================ */
+#progress-wrap{flex-shrink:0;display:none;}
+#progress-info{display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-bottom:3px;}
+#progress-track{height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+#progress-fill{height:100%;background:linear-gradient(90deg,var(--primary),var(--success));width:0%;transition:width .2s;border-radius:3px;}
+#progress-wrap.pulse #progress-fill{animation:pulse-anim 1s ease-in-out infinite alternate;}
+@keyframes pulse-anim{from{width:15%;}to{width:85%;};}
+
+/* ============================================================
+   ACTION BUTTONS
+   ============================================================ */
+#action-row{display:flex;gap:6px;flex-shrink:0;}
+#btn-start{
+  flex:2;padding:9px;background:var(--success-light);
+  border:2px solid var(--success);border-radius:var(--radius);
+  cursor:pointer;font-size:13px;font-weight:700;color:#166534;
+  transition:all .15s;
+}
+#btn-start:hover{background:#bbf7d0;}
+#btn-start:disabled{opacity:.4;cursor:not-allowed;}
+#btn-clear{
+  flex:1;padding:9px;background:var(--warn-light);
+  border:1px solid var(--warn);border-radius:var(--radius);
+  cursor:pointer;font-size:11px;color:#92400e;transition:all .15s;
+}
+#btn-clear:hover{background:#fde68a;}
+#btn-clip{
+  flex:1;padding:9px;background:var(--primary-light);
+  border:1px solid var(--primary);border-radius:var(--radius);
+  cursor:pointer;font-size:11px;color:var(--primary);transition:all .15s;
+}
+#btn-clip:hover{background:#bfdbfe;}
+
+/* ============================================================
+   LOG (COLAPSÁVEL)
+   ============================================================ */
+#log-section{flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);}
+#log-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 10px;cursor:pointer;user-select:none;border-radius:var(--radius);
+}
+#log-header-left{display:flex;align-items:center;gap:8px;}
+#log-title{font-size:11px;font-weight:600;color:var(--text2);}
+#log-badge{
+  font-size:10px;background:var(--primary);color:#fff;
+  padding:1px 6px;border-radius:10px;min-width:18px;text-align:center;
+}
+#log-toggle-btn{font-size:10px;color:var(--text2);}
+#log-body{height:70px;overflow-y:auto;padding:6px 10px;background:#0f172a;border-radius:0 0 var(--radius) var(--radius);}
+#log-body.expanded{height:180px;}
+#log-body.collapsed{display:none;}
+.log-line{font-family:'Courier New',monospace;font-size:10px;line-height:1.5;color:#94a3b8;}
+.log-line.ok{color:#4ade80;}
+.log-line.warn{color:#fbbf24;}
+.log-line.err{color:#f87171;}
+.log-line.info{color:#60a5fa;}
+#log-clear-btn{font-size:10px;color:var(--text2);background:none;border:none;cursor:pointer;padding:2px 6px;}
+#log-clear-btn:hover{color:var(--danger);}
+
+/* ============================================================
+   STATUS BAR
+   ============================================================ */
+#statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:10px;color:var(--text2);flex-shrink:0;padding:0 2px;
+}
+
+/* ============================================================
+   OUTPUT MODAL
+   ============================================================ */
+#out-modal{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.6);z-index:999;
+  align-items:center;justify-content:center;padding:16px;
+}
+#out-modal.show{display:flex;}
+.modal-box{
+  background:#fff;border-radius:12px;
+  width:100%;max-width:860px;max-height:90vh;
+  display:flex;flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+.modal-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:var(--primary);color:#fff;
+  border-radius:12px 12px 0 0;flex-shrink:0;
+}
+.modal-head h2{font-size:13px;}
+.modal-head-right{display:flex;align-items:center;gap:8px;}
+.modal-stats{font-size:10px;opacity:.8;}
+.modal-close{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;}
+.modal-body{flex:1;overflow:auto;padding:12px;}
+.modal-body pre{font-family:'Courier New',monospace;font-size:10px;white-space:pre-wrap;word-break:break-word;line-height:1.5;}
+.modal-foot{
+  padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;
+  border-top:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
+}
+.modal-foot button{padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-size:12px;}
+.btn-dl{background:var(--success);color:#fff;}
+.btn-dl:hover{background:#15803d;}
+.btn-cp-modal{background:var(--primary);color:#fff;}
+.btn-cp-modal:hover{background:var(--primary-dark);}
+.btn-close-modal{background:var(--surface2);border:1px solid var(--border) !important;color:var(--text);}
+
+/* ============================================================
+   LOADING OVERLAY (dentro do tab-area)
+   ============================================================ */
+#loading-overlay{
+  display:none;position:absolute;inset:0;
+  background:rgba(255,255,255,.85);
+  align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;border-radius:var(--radius);
+  z-index:10;
+}
+#loading-overlay.show{display:flex;}
+#loading-overlay p{font-size:12px;color:var(--text2);}
+.spinner{
+  width:32px;height:32px;border:3px solid var(--border);
+  border-top-color:var(--primary);border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+#tab-area{position:relative;}
+
+/* ============================================================
+   TOASTS
+   ============================================================ */
+#toast-wrap{position:fixed;bottom:16px;right:16px;display:flex;flex-direction:column;gap:6px;z-index:2000;}
+.toast{
+  background:#1e293b;color:#fff;padding:8px 14px;
+  border-radius:8px;font-size:12px;box-shadow:0 4px 12px rgba(0,0,0,.3);
+  animation:slide-in .2s ease;max-width:280px;
+}
+.toast.ok{border-left:3px solid var(--success);}
+.toast.warn{border-left:3px solid var(--warn);}
+.toast.err{border-left:3px solid var(--danger);}
+@keyframes slide-in{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* ============================================================
+   MOBILE — max 640px
+   ============================================================ */
+@media(max-width:640px){
+  #app{padding:4px;gap:4px;}
+  #header h1{font-size:12px;}
+  #header-right{gap:6px;}
+  #tabs-nav{gap:1px;}
+  .tab-btn{padding:0 8px;font-size:10px;height:32px;}
+  #action-row{flex-wrap:wrap;}
+  #btn-start{flex:100%;}
+  #btn-clear,#btn-clip{flex:1;}
+  .gi-split{flex-direction:column;max-height:none;}
+  .gi-col{max-height:160px;}
+  .modal-box{max-height:95vh;}
+  .modal-foot{justify-content:stretch;}
+  .modal-foot button{flex:1;}
+  .tree-item{min-height:36px;}
+  .cl-item{min-height:36px;}
+  .arb-item{min-height:40px;}
+}
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:var(--surface2);}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#94a3b8;}
+
+
+/* ============================================================
+   OTIMIZAÇÃO — virtualização, modos e controles de tarefa
+   ============================================================ */
+.checklist,.tree-wrap,.preview-wrap,.arb-drop{position:relative;contain:layout paint;}
+.virtual-spacer{position:relative;width:100%;min-height:1px;}
+.virtual-row{position:absolute!important;left:0;right:0;width:100%;margin:0;overflow:hidden;}
+.file-row-main{min-width:0;flex:1;overflow:hidden;}
+.file-row-main .cl-item-text,.file-row-main .cl-item-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.file-size,.tree-count{margin-left:auto;white-space:nowrap;padding-left:8px;}
+.tree-more{color:var(--primary);font-weight:600;}
+#scan-mode-badge{background:rgba(255,255,255,.18);padding:2px 7px;border-radius:10px;white-space:nowrap;font-size:10px;}
+#scan-mode-badge.mode-fast{background:rgba(34,197,94,.28);}
+#scan-mode-badge.mode-compat{background:rgba(245,158,11,.28);}
+.btn-compat{background:var(--surface2);color:var(--primary);border:1px solid var(--primary);}
+.btn-compat:hover{background:var(--primary-light);}
+#loading-cancel-btn{display:none;min-width:90px;}
+#progress-info{gap:8px;align-items:center;}
+#prog-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#prog-pct{white-space:nowrap;}
+.prev-item.virtual-row{display:flex;align-items:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.arb-item.virtual-row{display:flex;}
+@media(max-width:640px){
+  #scan-mode-badge{display:none;}
+  .btn-compat{padding-left:7px;padding-right:7px;}
+  .file-size{max-width:62px;overflow:hidden;text-overflow:ellipsis;}
+}
+
+
+
+/* ============================================================
+   v2.3 — ZIP, padrões configuráveis e layout responsivo
+   ============================================================ */
+.source-row{display:grid;grid-template-columns:55px minmax(0,1fr) auto;align-items:center;gap:6px;}
+.source-actions{display:flex;gap:5px;align-items:center;}
+.source-actions .btn-browse{min-width:58px;}
+.btn-zip{background:var(--success);}
+.btn-zip:hover{background:#15803d;}
+#scan-mode-badge.mode-zip{background:rgba(168,85,247,.35);}
+#ignore-summary{font-size:10px;color:var(--text2);white-space:nowrap;}
+.ext-header{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--surface2);border-bottom:2px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);flex-shrink:0;user-select:none;}
+.ext-h-col{cursor:pointer;transition:color .15s;white-space:nowrap;}
+.ext-h-col:hover{color:var(--primary);}
+.ext-h-col.sort-asc::after{content:' ▲';}
+.ext-h-col.sort-desc::after{content:' ▼';}
+.ext-check-space{width:18px;flex:0 0 18px;}
+.ext-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+.ext-size{width:78px;text-align:right;flex:0 0 78px;}
+.ext-count{width:58px;text-align:right;flex:0 0 58px;}
+.ext-row{gap:8px;}
+.explorer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
+#ignore-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:1500;align-items:center;justify-content:center;padding:16px;}
+#ignore-modal.show{display:flex;}
+.ignore-modal-box{background:var(--surface);border-radius:12px;width:100%;max-width:600px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.ignore-toolbar{padding:9px 14px;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--border);}
+.ignore-count{font-size:10px;color:var(--text2);margin-left:auto;}
+.ignore-body{overflow:auto;padding:14px;display:flex;flex-direction:column;gap:15px;}
+.ignore-group-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:.04em;}
+.ignore-group-title button{border:0;background:none;color:var(--primary);font-size:10px;cursor:pointer;}
+.ignore-items{border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+.ignore-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;}
+.ignore-item:last-child{border-bottom:0;}
+.ignore-item.on{background:var(--success-light);}
+.ignore-item code{font-size:11px;font-weight:700;min-width:110px;}
+.ignore-item span{font-size:10px;color:var(--text2);}
+@media(max-width:640px){
+  .source-row{grid-template-columns:55px minmax(0,1fr);}
+  .source-actions{grid-column:2;display:grid;grid-template-columns:repeat(auto-fit,minmax(58px,1fr));width:100%;}
+  .source-actions .btn-browse{min-width:0;padding-left:6px;padding-right:6px;}
+  .ignore-item code{min-width:80px;}
+  .ignore-toolbar{flex-wrap:wrap;}
+  .explorer-toolbar{align-items:flex-start;}
+  .explorer-toolbar small{max-width:45%;}
+  .ext-size{width:65px;flex-basis:65px;}
+  .ext-count{width:46px;flex-basis:46px;}
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <h1>📁 Copiador de Código v2.3 — Otimizado + ZIP</h1>
+    <div id="header-right">
+      <button id="theme-toggle" onclick="toggleTheme()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 8px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;">🌙</button>
+      <span id="scan-mode-badge">detectando…</span>
+      <span id="file-count-badge">0 arquivos</span>
+      <span id="header-status">Pronto</span>
+    </div>
+  </div>
+
+  <!-- CONFIG SECTION (colapsável) -->
+  <div id="config-section">
+    <div id="config-header" onclick="toggleConfig()">
+      <span>⚙ Configurações</span>
+      <span id="config-toggle">▼ recolher</span>
+    </div>
+    <div id="config-body">
+      <div class="dir-row source-row">
+        <span class="dir-label">📂 Entrada:</span>
+        <input class="dir-input" id="src-input" type="text" placeholder="Selecione uma pasta ou ZIP..." readonly>
+        <div class="source-actions">
+          <button class="btn-browse" onclick="pickSourceDir()" title="Usa o modo rápido quando disponível">Pasta…</button>
+          <button class="btn-browse btn-zip" onclick="pickZip()" title="Importar projeto de um arquivo ZIP">ZIP…</button>
+          <button class="btn-browse btn-compat" id="btn-legacy" onclick="pickSourceDirLegacy()" title="Força o seletor webkitdirectory">Compat.</button>
+        </div>
+        <input type="file" id="src-picker" webkitdirectory multiple style="display:none">
+        <input type="file" id="zip-picker" accept=".zip,application/zip" style="display:none">
+      </div>
+      <div class="dir-row">
+        <span class="dir-label">💾 Saída:</span>
+        <input class="dir-input" id="out-name-input" type="text" placeholder="codigo_completo.txt" value="codigo_completo.txt">
+      </div>
+      <div class="opts-row">
+        <label>Ordem:</label>
+        <select class="sort-sel" id="sort-sel">
+          <option value="natural">Natural</option>
+          <option value="alpha">Alfabética</option>
+        </select>
+        <button class="btn-sm" onclick="openIgnoreModal()">Padrões globais…</button>
+        <span id="ignore-summary">Carregando padrões…</span>
+        <label class="cb-label">
+          <input type="checkbox" id="size-filter-cb">
+          Ignorar &gt; <input type="number" id="max-size-kb" value="500" min="1" style="width:55px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;"> KB
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABS NAV -->
+  <div id="tabs-nav">
+    <button class="tab-btn active" onclick="switchTab('ext')">Extensões</button>
+    <button class="tab-btn" onclick="switchTab('files')">Arquivos</button>
+    <button class="tab-btn" onclick="switchTab('search')">Buscar Nome</button>
+    <button class="tab-btn" onclick="switchTab('explorer')">Explorador</button>
+    <button class="tab-btn" onclick="switchTab('arb')">Avulsos</button>
+    <button class="tab-btn" onclick="switchTab('gi')">Gitignore</button>
+  </div>
+
+  <!-- TAB AREA -->
+  <div id="tab-area">
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+      <div class="spinner"></div>
+      <p id="loading-text">Carregando metadados…</p>
+      <button class="btn-sm danger" id="loading-cancel-btn" onclick="cancelCurrentTask()">Cancelar</button>
+    </div>
+
+    <!-- EXT -->
+    <div class="tab-pane active" id="tab-ext">
+      <div class="search-row">
+        <label>🔍</label>
+        <input class="search-input" id="ext-search" placeholder="Filtrar extensões…" oninput="renderExtList()">
+      </div>
+      <div class="ext-header" id="ext-header">
+        <span class="ext-check-space"></span>
+        <span class="ext-h-col ext-name" data-col="ext" onclick="sortExtBy('ext')">Extensão</span>
+        <span class="ext-h-col ext-size" data-col="size" onclick="sortExtBy('size')">Tamanho</span>
+        <span class="ext-h-col ext-count" data-col="count" onclick="sortExtBy('count')">Arquivos</span>
+      </div>
+      <div class="checklist" id="ext-list"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+      <div class="btn-row">
+        <button class="btn-sm" onclick="selAllExt()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllExt()">⬜ Nenhum</button>
+        <span id="ext-counter" style="font-size:10px;color:var(--text2);margin-left:auto;align-self:center;"></span>
+      </div>
+    </div>
+
+    <!-- FILES -->
+    <div class="tab-pane" id="tab-files">
+      <div class="search-row">
+        <label>🔍</label>
+        <input class="search-input" id="file-search" placeholder="Filtrar arquivos…" oninput="renderFileList()">
+      </div>
+      <div class="checklist" id="file-list"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+      <div class="btn-row">
+        <button class="btn-sm" onclick="selAllFiles()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllFiles()">⬜ Nenhum</button>
+        <span id="file-counter" style="font-size:10px;color:var(--text2);margin-left:auto;align-self:center;"></span>
+      </div>
+    </div>
+
+    <!-- SEARCH -->
+    <div class="tab-pane" id="tab-search">
+      <small style="color:var(--text2);flex-shrink:0;">Cole nomes, caminhos ou saída de <code>git status</code>:</small>
+      <textarea class="txt-input" id="txt-search" placeholder="modified: src/main.py&#10;new file: config.json&#10;utils, README"></textarea>
+      <div class="btn-row">
+        <button class="btn-sm primary" onclick="doSearch()">🔍 Buscar</button>
+        <button class="btn-sm" onclick="selAllSearch()">✅ Tudo</button>
+        <button class="btn-sm" onclick="deselAllSearch()">⬜ Nenhum</button>
+      </div>
+      <div class="checklist" id="search-list"><div class="cl-empty">Use o campo acima para buscar.</div></div>
+    </div>
+
+    <!-- EXPLORER -->
+    <div class="tab-pane" id="tab-explorer">
+      <div class="explorer-toolbar">
+        <small style="color:var(--text2);">Toque/clique para marcar arquivos e pastas:</small>
+        <div class="btn-row">
+          <button class="btn-sm" onclick="expandAllTree()">Expandir tudo</button>
+          <button class="btn-sm" onclick="collapseAllTree()">Recolher tudo</button>
+        </div>
+      </div>
+      <div class="tree-wrap" id="tree-wrap"><div class="cl-empty">Selecione uma pasta de entrada.</div></div>
+    </div>
+
+    <!-- ARBITRARY -->
+    <div class="tab-pane" id="tab-arb">
+      <small style="color:var(--text2);flex-shrink:0;">Adicione arquivos avulsos de qualquer local (arraste & solte):</small>
+      <div class="arb-drop" id="arb-drop"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleArbDrop(event)">
+        <div class="arb-drop-hint" id="arb-hint">⬆ Arraste arquivos aqui ou use o botão abaixo</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-sm primary" onclick="document.getElementById('arb-picker').click()">➕ Adicionar…</button>
+        <button class="btn-sm" onclick="remCheckedArb()">➖ Remover</button>
+        <button class="btn-sm danger" onclick="clearArb()">🗑 Limpar</button>
+      </div>
+      <input type="file" id="arb-picker" multiple style="display:none" onchange="handleArbPicker(event)">
+    </div>
+
+    <!-- GITIGNORE -->
+    <div class="tab-pane" id="tab-gi">
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap;">
+        <label class="cb-label">
+          <input type="checkbox" id="gi-cb" onchange="toggleGI()" disabled>
+          Aplicar regras .gitignore
+        </label>
+        <div class="gi-status" id="gi-status">⚠ Nenhum diretório selecionado.</div>
+      </div>
+      <div class="gi-split">
+        <div class="gi-col">
+          <small style="font-weight:600;color:var(--text2);">Regras:</small>
+          <div class="gi-rules" id="gi-rules"></div>
+          <div class="gi-add">
+            <input type="text" id="gi-input" placeholder="Ex: *.log, temp/" onkeydown="if(event.key==='Enter')addGIRule()">
+            <button class="btn-sm primary" onclick="addGIRule()">+</button>
+            <button class="btn-sm" onclick="remGIRule()">−</button>
+          </div>
+        </div>
+        <div class="gi-col">
+          <small style="font-weight:600;color:var(--text2);">Preview:</small>
+          <div class="preview-wrap" id="gi-preview"></div>
+          <button class="btn-sm" onclick="refreshGIPreview()">🔄 Atualizar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COUNTER -->
+  <div id="counter-bar">
+    <span id="counter-text">0 arquivo(s) selecionado(s) | ~0 linhas</span>
+    <span id="token-estimate">~0 tokens estimados</span>
+  </div>
+
+  <!-- PROGRESS -->
+  <div id="progress-wrap">
+    <div id="progress-info">
+      <span id="prog-label">Processando…</span>
+      <span id="prog-pct">0%</span>
+      <button class="btn-sm danger" id="cancel-task-btn" onclick="cancelCurrentTask()" style="display:none;padding:2px 7px;">Cancelar</button>
+    </div>
+    <div id="progress-track"><div id="progress-fill"></div></div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div id="action-row">
+    <button id="btn-start" onclick="startCopy()">▶ INICIAR CÓPIA</button>
+    <button id="btn-clear" onclick="clearAll()">🗑 Limpar</button>
+    <button id="btn-clip" onclick="clipboardCopy()">📋 Clipboard</button>
+  </div>
+
+  <!-- LOG COLAPSÁVEL -->
+  <div id="log-section">
+    <div id="log-header" onclick="toggleLog()">
+      <div id="log-header-left">
+        <span id="log-title">📋 Log</span>
+        <span id="log-badge">0</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="log-clear-btn" onclick="event.stopPropagation();clearLog()">limpar</button>
+        <button class="btn-sm" id="log-expand-btn" onclick="event.stopPropagation();expandLog()" style="padding:2px 6px;font-size:10px;">⛶ expandir</button>
+        <span id="log-toggle-btn">▲ recolher</span>
+      </div>
+    </div>
+    <div id="log-body"></div>
+  </div>
+
+  <!-- STATUS -->
+  <div id="statusbar">
+    <span id="st-left">Pronto</span>
+    <span id="st-right">v2.3 — HTML otimizado + ZIP</span>
+  </div>
+</div>
+
+
+<!-- MODAL: PADRÕES GLOBAIS -->
+<div id="ignore-modal" role="dialog" aria-modal="true" aria-label="Padrões globais a ignorar" onclick="if(event.target===this)closeIgnoreModal()">
+  <div class="ignore-modal-box">
+    <div class="modal-head">
+      <div><h2>Padrões globais a ignorar</h2><div class="modal-stats">Itens marcados não serão incluídos</div></div>
+      <button class="modal-close" onclick="closeIgnoreModal()">×</button>
+    </div>
+    <div class="ignore-toolbar">
+      <button class="btn-sm" onclick="setAllIgnorePatterns(true)">Marcar tudo</button>
+      <button class="btn-sm" onclick="setAllIgnorePatterns(false)">Desmarcar tudo</button>
+      <span class="ignore-count" id="ignore-count"></span>
+    </div>
+    <div class="ignore-body" id="ignore-body"></div>
+    <div class="modal-foot"><button class="btn-cp-modal" onclick="closeIgnoreModal()">Concluir</button></div>
+  </div>
+</div>
+
+<!-- OUTPUT MODAL -->
+<div id="out-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>📄 codigo_completo.txt</h2>
+      <div class="modal-head-right">
+        <span class="modal-stats" id="modal-stats"></span>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+    </div>
+    <div class="modal-body"><pre id="modal-pre"></pre></div>
+    <div class="modal-foot">
+      <button class="btn-cp-modal" onclick="copyModalContent()">📋 Copiar tudo</button>
+      <button class="btn-dl" onclick="downloadOutput()">💾 Salvar .txt</button>
+      <button class="btn-close-modal" onclick="closeModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOASTS -->
+<div id="toast-wrap"></div>
+
+<!-- fflate, licença MIT, incorporada para funcionamento offline -->
+<script id="fflate-source" type="text/plain">
+!function(f){typeof module!='undefined'&&typeof exports=='object'?module.exports=f():typeof define!='undefined'&&define.amd?define(f):(typeof self!='undefined'?self:this).fflate=f()}(function(){var _e={};"use strict";var t=(typeof module!='undefined'&&typeof exports=='object'?function(_f){"use strict";var e,t=";var __w=require('worker_threads');__w.parentPort.on('message',function(m){onmessage({data:m})}),postMessage=function(m,t){__w.parentPort.postMessage(m,t)},close=process.exit;self=global";try{e=require("worker_threads").Worker}catch(e){}exports.default=e?function(r,n,o,a,s){var u=!1,i=new e(r+t,{eval:!0}).on("error",(function(e){return s(e,null)})).on("message",(function(e){return s(null,e)})).on("exit",(function(e){e&&!u&&s(Error("exited with code "+e),null)}));return i.postMessage(o,a),i.terminate=function(){return u=!0,e.prototype.terminate.call(i)},i}:function(e,t,r,n,o){setImmediate((function(){return o(Error("async operations unsupported - update to Node 12+ (or Node 10-11 with the --experimental-worker CLI flag)"),null)}));var a=function(){};return{terminate:a,postMessage:a}};return _f}:function(_f){"use strict";var e={};_f.default=function(r,t,s,a,n){var o=new Worker(e[t]||(e[t]=URL.createObjectURL(new Blob([r+';addEventListener("error",function(e){e=e.error;postMessage({$e$:[e.message,e.code,e.stack]})})'],{type:"text/javascript"}))));return o.onmessage=function(e){var r=e.data,t=r.$e$;if(t){var s=Error(t[0]);s.code=t[1],s.stack=t[2],n(s,null)}else n(null,r)},o.postMessage(s,a),o};return _f})({}),n=Uint8Array,r=Uint16Array,e=Int32Array,i=new n([0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0,0,0,0]),o=new n([0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13,0,0]),s=new n([16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15]),a=function(t,n){for(var i=new r(31),o=0;o<31;++o)i[o]=n+=1<<t[o-1];var s=new e(i[30]);for(o=1;o<30;++o)for(var a=i[o];a<i[o+1];++a)s[a]=a-i[o]<<5|o;return{b:i,r:s}},u=a(i,2),h=u.b,f=u.r;h[28]=258,f[258]=28;for(var l=a(o,0),c=l.b,p=l.r,v=new r(32768),d=0;d<32768;++d){var g=(43690&d)>>1|(21845&d)<<1;v[d]=((65280&(g=(61680&(g=(52428&g)>>2|(13107&g)<<2))>>4|(3855&g)<<4))>>8|(255&g)<<8)>>1}var y=function(t,n,e){for(var i=t.length,o=0,s=new r(n);o<i;++o)t[o]&&++s[t[o]-1];var a,u=new r(n);for(o=1;o<n;++o)u[o]=u[o-1]+s[o-1]<<1;if(e){a=new r(1<<n);var h=15-n;for(o=0;o<i;++o)if(t[o])for(var f=o<<4|t[o],l=n-t[o],c=u[t[o]-1]++<<l,p=c|(1<<l)-1;c<=p;++c)a[v[c]>>h]=f}else for(a=new r(i),o=0;o<i;++o)t[o]&&(a[o]=v[u[t[o]-1]++]>>15-t[o]);return a},m=new n(288);for(d=0;d<144;++d)m[d]=8;for(d=144;d<256;++d)m[d]=9;for(d=256;d<280;++d)m[d]=7;for(d=280;d<288;++d)m[d]=8;var b=new n(32);for(d=0;d<32;++d)b[d]=5;var w=y(m,9,0),x=y(m,9,1),z=y(b,5,0),k=y(b,5,1),M=function(t){for(var n=t[0],r=1;r<t.length;++r)t[r]>n&&(n=t[r]);return n},S=function(t,n,r){var e=n/8|0;return(t[e]|t[e+1]<<8)>>(7&n)&r},A=function(t,n){var r=n/8|0;return(t[r]|t[r+1]<<8|t[r+2]<<16)>>(7&n)},T=function(t){return(t+7)/8|0},D=function(t,r,e){return(null==r||r<0)&&(r=0),(null==e||e>t.length)&&(e=t.length),new n(t.subarray(r,e))};_e.FlateErrorCode={UnexpectedEOF:0,InvalidBlockType:1,InvalidLengthLiteral:2,InvalidDistance:3,StreamFinished:4,NoStreamHandler:5,InvalidHeader:6,NoCallback:7,InvalidUTF8:8,ExtraFieldTooLong:9,InvalidDate:10,FilenameTooLong:11,StreamFinishing:12,InvalidZipData:13,UnknownCompressionMethod:14};var C=["unexpected EOF","invalid block type","invalid length/literal","invalid distance","stream finished","no stream handler",,"no callback","invalid UTF-8 data","extra field too long","date not in range 1980-2099","filename too long","stream finishing","invalid zip data"],I=function(t,n,r){var e=Error(n||C[t]);if(e.code=t,Error.captureStackTrace&&Error.captureStackTrace(e,I),!r)throw e;return e},U=function(t,r,e,a){var u=t.length,f=a?a.length:0;if(!u||r.f&&!r.l)return e||new n(0);var l=!e,p=l||2!=r.i,v=r.i;l&&(e=new n(3*u));var d=function(t){var r=e.length;if(t>r){var i=new n(Math.max(2*r,t));i.set(e),e=i}},g=r.f||0,m=r.p||0,b=r.b||0,w=r.l,z=r.d,C=r.m,U=r.n,F=8*u;do{if(!w){g=S(t,m,1);var E=S(t,m+1,3);if(m+=3,!E){var Z=t[(J=T(m)+4)-4]|t[J-3]<<8,q=J+Z;if(q>u){v&&I(0);break}p&&d(b+Z),e.set(t.subarray(J,q),b),r.b=b+=Z,r.p=m=8*q,r.f=g;continue}if(1==E)w=x,z=k,C=9,U=5;else if(2==E){var O=S(t,m,31)+257,G=S(t,m+10,15)+4,L=O+S(t,m+5,31)+1;m+=14;for(var H=new n(L),j=new n(19),N=0;N<G;++N)j[s[N]]=S(t,m+3*N,7);m+=3*G;var P=M(j),B=(1<<P)-1,Y=y(j,P,1);for(N=0;N<L;){var J,K=Y[S(t,m,B)];if(m+=15&K,(J=K>>4)<16)H[N++]=J;else{var Q=0,R=0;for(16==J?(R=3+S(t,m,3),m+=2,Q=H[N-1]):17==J?(R=3+S(t,m,7),m+=3):18==J&&(R=11+S(t,m,127),m+=7);R--;)H[N++]=Q}}var V=H.subarray(0,O),W=H.subarray(O);C=M(V),U=M(W),w=y(V,C,1),z=y(W,U,1)}else I(1);if(m>F){v&&I(0);break}}p&&d(b+131072);for(var X=(1<<C)-1,$=(1<<U)-1,_=m;;_=m){var tt=(Q=w[A(t,m)&X])>>4;if((m+=15&Q)>F){v&&I(0);break}if(Q||I(2),tt<256)e[b++]=tt;else{if(256==tt){_=m,w=null;break}var nt=tt-254;tt>264&&(nt=S(t,m,(1<<(it=i[N=tt-257]))-1)+h[N],m+=it);var rt=z[A(t,m)&$],et=rt>>4;if(rt||I(3),m+=15&rt,W=c[et],et>3){var it=o[et];W+=A(t,m)&(1<<it)-1,m+=it}if(m>F){v&&I(0);break}p&&d(b+131072);var ot=b+nt;if(b<W){var st=f-W,at=Math.min(W,ot);for(st+b<0&&I(3);b<at;++b)e[b]=a[st+b]}for(;b<ot;++b)e[b]=e[b-W]}}r.l=w,r.p=_,r.b=b,r.f=g,w&&(g=1,r.m=C,r.d=z,r.n=U)}while(!g);return b!=e.length&&l?D(e,0,b):e.subarray(0,b)},F=function(t,n,r){var e=n/8|0;t[e]|=r<<=7&n,t[e+1]|=r>>8},E=function(t,n,r){var e=n/8|0;t[e]|=r<<=7&n,t[e+1]|=r>>8,t[e+2]|=r>>16},Z=function(t,e){for(var i=[],o=0;o<t.length;++o)t[o]&&i.push({s:o,f:t[o]});var s=i.length,a=i.slice();if(!s)return{t:N,l:0};if(1==s){var u=new n(i[0].s+1);return u[i[0].s]=1,{t:u,l:1}}i.sort((function(t,n){return t.f-n.f})),i.push({s:-1,f:25001});var h=i[0],f=i[1],l=0,c=1,p=2;for(i[0]={s:-1,f:h.f+f.f,l:h,r:f};c!=s-1;)h=i[i[l].f<i[p].f?l++:p++],f=i[l!=c&&i[l].f<i[p].f?l++:p++],i[c++]={s:-1,f:h.f+f.f,l:h,r:f};var v=a[0].s;for(o=1;o<s;++o)a[o].s>v&&(v=a[o].s);var d=new r(v+1),g=q(i[c-1],d,0);if(g>e){o=0;var y=0,m=g-e,b=1<<m;for(a.sort((function(t,n){return d[n.s]-d[t.s]||t.f-n.f}));o<s;++o){var w=a[o].s;if(!(d[w]>e))break;y+=b-(1<<g-d[w]),d[w]=e}for(y>>=m;y>0;){var x=a[o].s;d[x]<e?y-=1<<e-d[x]++-1:++o}for(;o>=0&&y;--o){var z=a[o].s;d[z]==e&&(--d[z],++y)}g=e}return{t:new n(d),l:g}},q=function(t,n,r){return-1==t.s?Math.max(q(t.l,n,r+1),q(t.r,n,r+1)):n[t.s]=r},O=function(t){for(var n=t.length;n&&!t[--n];);for(var e=new r(++n),i=0,o=t[0],s=1,a=function(t){e[i++]=t},u=1;u<=n;++u)if(t[u]==o&&u!=n)++s;else{if(!o&&s>2){for(;s>138;s-=138)a(32754);s>2&&(a(s>10?s-11<<5|28690:s-3<<5|12305),s=0)}else if(s>3){for(a(o),--s;s>6;s-=6)a(8304);s>2&&(a(s-3<<5|8208),s=0)}for(;s--;)a(o);s=1,o=t[u]}return{c:e.subarray(0,i),n:n}},G=function(t,n){for(var r=0,e=0;e<n.length;++e)r+=t[e]*n[e];return r},L=function(t,n,r){var e=r.length,i=T(n+2);t[i]=255&e,t[i+1]=e>>8,t[i+2]=255^t[i],t[i+3]=255^t[i+1];for(var o=0;o<e;++o)t[i+o+4]=r[o];return 8*(i+4+e)},H=function(t,n,e,a,u,h,f,l,c,p,v){F(n,v++,e),++u[256];for(var d=Z(u,15),g=d.t,x=d.l,k=Z(h,15),M=k.t,S=k.l,A=O(g),T=A.c,D=A.n,C=O(M),I=C.c,U=C.n,q=new r(19),H=0;H<T.length;++H)++q[31&T[H]];for(H=0;H<I.length;++H)++q[31&I[H]];for(var j=Z(q,7),N=j.t,P=j.l,B=19;B>4&&!N[s[B-1]];--B);var Y,J,K,Q,R=p+5<<3,V=G(u,m)+G(h,b)+f,W=G(u,g)+G(h,M)+f+14+3*B+G(q,N)+2*q[16]+3*q[17]+7*q[18];if(c>=0&&R<=V&&R<=W)return L(n,v,t.subarray(c,c+p));if(F(n,v,1+(W<V)),v+=2,W<V){Y=y(g,x,0),J=g,K=y(M,S,0),Q=M;var X=y(N,P,0);for(F(n,v,D-257),F(n,v+5,U-1),F(n,v+10,B-4),v+=14,H=0;H<B;++H)F(n,v+3*H,N[s[H]]);v+=3*B;for(var $=[T,I],_=0;_<2;++_){var tt=$[_];for(H=0;H<tt.length;++H)F(n,v,X[rt=31&tt[H]]),v+=N[rt],rt>15&&(F(n,v,tt[H]>>5&127),v+=tt[H]>>12)}}else Y=w,J=m,K=z,Q=b;for(H=0;H<l;++H){var nt=a[H];if(nt>255){var rt;E(n,v,Y[257+(rt=nt>>18&31)]),v+=J[rt+257],rt>7&&(F(n,v,nt>>23&31),v+=i[rt]);var et=31&nt;E(n,v,K[et]),v+=Q[et],et>3&&(E(n,v,nt>>5&8191),v+=o[et])}else E(n,v,Y[nt]),v+=J[nt]}return E(n,v,Y[256]),v+J[256]},j=new e([65540,131080,131088,131104,262176,1048704,1048832,2114560,2117632]),N=new n(0),P=function(t,s,a,u,h,l){var c=l.z||t.length,v=new n(u+c+5*(1+Math.ceil(c/7e3))+h),d=v.subarray(u,v.length-h),g=l.l,y=7&(l.r||0);if(s){y&&(d[0]=l.r>>3);for(var m=j[s-1],b=m>>13,w=8191&m,x=(1<<a)-1,z=l.p||new r(32768),k=l.h||new r(x+1),M=Math.ceil(a/3),S=2*M,A=function(n){return(t[n]^t[n+1]<<M^t[n+2]<<S)&x},C=new e(25e3),I=new r(288),U=new r(32),F=0,E=0,Z=l.i||0,q=0,O=l.w||0,G=0;Z+2<c;++Z){var N=A(Z),P=32767&Z,B=k[N];if(z[P]=B,k[N]=P,O<=Z){var Y=c-Z;if((F>7e3||q>24576)&&(Y>423||!g)){y=H(t,d,0,C,I,U,E,q,G,Z-G,y),q=F=E=0,G=Z;for(var J=0;J<286;++J)I[J]=0;for(J=0;J<30;++J)U[J]=0}var K=2,Q=0,R=w,V=P-B&32767;if(Y>2&&N==A(Z-V))for(var W=Math.min(b,Y)-1,X=Math.min(32767,Z),$=Math.min(258,Y);V<=X&&--R&&P!=B;){if(t[Z+K]==t[Z+K-V]){for(var _=0;_<$&&t[Z+_]==t[Z+_-V];++_);if(_>K){if(K=_,Q=V,_>W)break;var tt=Math.min(V,_-2),nt=0;for(J=0;J<tt;++J){var rt=Z-V+J&32767,et=rt-z[rt]&32767;et>nt&&(nt=et,B=rt)}}}V+=(P=B)-(B=z[P])&32767}if(Q){C[q++]=268435456|f[K]<<18|p[Q];var it=31&f[K],ot=31&p[Q];E+=i[it]+o[ot],++I[257+it],++U[ot],O=Z+K,++F}else C[q++]=t[Z],++I[t[Z]]}}for(Z=Math.max(Z,O);Z<c;++Z)C[q++]=t[Z],++I[t[Z]];y=H(t,d,g,C,I,U,E,q,G,Z-G,y),g||(l.r=7&y|d[y/8|0]<<3,y-=7,l.h=k,l.p=z,l.i=Z,l.w=O)}else{for(Z=l.w||0;Z<c+g;Z+=65535){var st=Z+65535;st>=c&&(d[y/8|0]=g,st=c),y=L(d,y+1,t.subarray(Z,st))}l.i=c}return D(v,0,u+T(y)+h)},B=function(){for(var t=new Int32Array(256),n=0;n<256;++n){for(var r=n,e=9;--e;)r=(1&r&&-306674912)^r>>>1;t[n]=r}return t}(),Y=function(){var t=-1;return{p:function(n){for(var r=t,e=0;e<n.length;++e)r=B[255&r^n[e]]^r>>>8;t=r},d:function(){return~t}}},J=function(){var t=1,n=0;return{p:function(r){for(var e=t,i=n,o=0|r.length,s=0;s!=o;){for(var a=Math.min(s+2655,o);s<a;++s)i+=e+=r[s];e=(65535&e)+15*(e>>16),i=(65535&i)+15*(i>>16)}t=e,n=i},d:function(){return(255&(t%=65521))<<24|(65280&t)<<8|(255&(n%=65521))<<8|n>>8}}},K=function(t,r,e,i,o){if(!o&&(o={l:1},r.dictionary)){var s=r.dictionary.subarray(-32768),a=new n(s.length+t.length);a.set(s),a.set(t,s.length),t=a,o.w=s.length}return P(t,null==r.level?6:r.level,null==r.mem?o.l?Math.ceil(1.5*Math.max(8,Math.min(13,Math.log(t.length)))):20:12+r.mem,e,i,o)},Q=function(t,n){var r={};for(var e in t)r[e]=t[e];for(var e in n)r[e]=n[e];return r},R=function(t,n,r){for(var e=t(),i=""+t,o=i.slice(i.indexOf("[")+1,i.lastIndexOf("]")).replace(/\s+/g,"").split(","),s=0;s<e.length;++s){var a=e[s],u=o[s];if("function"==typeof a){n+=";"+u+"=";var h=""+a;if(a.prototype)if(-1!=h.indexOf("[native code]")){var f=h.indexOf(" ",8)+1;n+=h.slice(f,h.indexOf("(",f))}else for(var l in n+=h,a.prototype)n+=";"+u+".prototype."+l+"="+a.prototype[l];else n+=h}else r[u]=a}return n},V=[],W=function(t){var n=[];for(var r in t)t[r].buffer&&n.push((t[r]=new t[r].constructor(t[r])).buffer);return n},X=function(n,r,e,i){if(!V[e]){for(var o="",s={},a=n.length-1,u=0;u<a;++u)o=R(n[u],o,s);V[e]={c:R(n[a],o,s),e:s}}var h=Q({},V[e].e);return(0,t.default)(V[e].c+";onmessage=function(e){for(var k in e.data)self[k]=e.data[k];onmessage="+r+"}",e,h,W(h),i)},$=function(){return[n,r,e,i,o,s,h,c,x,k,v,C,y,M,S,A,T,D,I,U,Tt,it,ot]},_=function(){return[n,r,e,i,o,s,f,p,w,m,z,b,v,j,N,y,F,E,Z,q,O,G,L,H,T,D,P,K,kt,it]},tt=function(){return[pt,gt,ct,Y,B]},nt=function(){return[vt,dt]},rt=function(){return[yt,ct,J]},et=function(){return[mt]},it=function(t){return postMessage(t,[t.buffer])},ot=function(t){return t&&{out:t.size&&new n(t.size),dictionary:t.dictionary}},st=function(t,n,r,e,i,o){var s=X(r,e,i,(function(t,n){s.terminate(),o(t,n)}));return s.postMessage([t,n],n.consume?[t.buffer]:[]),function(){s.terminate()}},at=function(t){return t.ondata=function(t,n){return postMessage([t,n],[t.buffer])},function(n){n.data.length?(t.push(n.data[0],n.data[1]),postMessage([n.data[0].length])):t.flush()}},ut=function(t,n,r,e,i,o,s){var a,u=X(t,e,i,(function(t,r){t?(u.terminate(),n.ondata.call(n,t)):Array.isArray(r)?1==r.length?(n.queuedSize-=r[0],n.ondrain&&n.ondrain(r[0])):(r[1]&&u.terminate(),n.ondata.call(n,t,r[0],r[1])):s(r)}));u.postMessage(r),n.queuedSize=0,n.push=function(t,r){n.ondata||I(5),a&&n.ondata(I(4,0,1),null,!!r),n.queuedSize+=t.length,u.postMessage([t,a=r],[t.buffer])},n.terminate=function(){u.terminate()},o&&(n.flush=function(){u.postMessage([])})},ht=function(t,n){return t[n]|t[n+1]<<8},ft=function(t,n){return(t[n]|t[n+1]<<8|t[n+2]<<16|t[n+3]<<24)>>>0},lt=function(t,n){return ft(t,n)+4294967296*ft(t,n+4)},ct=function(t,n,r){for(;r;++n)t[n]=r,r>>>=8},pt=function(t,n){var r=n.filename;if(t[0]=31,t[1]=139,t[2]=8,t[8]=n.level<2?4:9==n.level?2:0,t[9]=3,0!=n.mtime&&ct(t,4,Math.floor(new Date(n.mtime||Date.now())/1e3)),r){t[3]=8;for(var e=0;e<=r.length;++e)t[e+10]=r.charCodeAt(e)}},vt=function(t){31==t[0]&&139==t[1]&&8==t[2]||I(6,"invalid gzip data");var n=t[3],r=10;4&n&&(r+=2+(t[10]|t[11]<<8));for(var e=(n>>3&1)+(n>>4&1);e>0;e-=!t[r++]);return r+(2&n)},dt=function(t){var n=t.length;return(t[n-4]|t[n-3]<<8|t[n-2]<<16|t[n-1]<<24)>>>0},gt=function(t){return 10+(t.filename?t.filename.length+1:0)},yt=function(t,n){var r=n.level,e=0==r?0:r<6?1:9==r?3:2;if(t[0]=120,t[1]=e<<6|(n.dictionary&&32),t[1]|=31-(t[0]<<8|t[1])%31,n.dictionary){var i=J();i.p(n.dictionary),ct(t,2,i.d())}},mt=function(t,n){return(8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31)&&I(6,"invalid zlib data"),(t[1]>>5&1)==+!n&&I(6,"invalid zlib data: "+(32&t[1]?"need":"unexpected")+" dictionary"),2+(t[1]>>3&4)};function bt(t,n){return"function"==typeof t&&(n=t,t={}),this.ondata=n,t}var wt=function(){function t(t,r){if("function"==typeof t&&(r=t,t={}),this.ondata=r,this.o=t||{},this.s={l:0,i:32768,w:32768,z:32768},this.b=new n(98304),this.o.dictionary){var e=this.o.dictionary.subarray(-32768);this.b.set(e,32768-e.length),this.s.i=32768-e.length}}return t.prototype.p=function(t,n){this.ondata(K(t,this.o,0,0,this.s),n)},t.prototype.push=function(t,r){this.ondata||I(5),this.s.l&&I(4);var e=t.length+this.s.z;if(e>this.b.length){if(e>2*this.b.length-32768){var i=new n(-32768&e);i.set(this.b.subarray(0,this.s.z)),this.b=i}var o=this.b.length-this.s.z;this.b.set(t.subarray(0,o),this.s.z),this.s.z=this.b.length,this.p(this.b,!1),this.b.set(this.b.subarray(-32768)),this.b.set(t.subarray(o),32768),this.s.z=t.length-o+32768,this.s.i=32766,this.s.w=32768}else this.b.set(t,this.s.z),this.s.z+=t.length;this.s.l=1&r,(this.s.z>this.s.w+8191||r)&&(this.p(this.b,r||!1),this.s.w=this.s.i,this.s.i-=2)},t.prototype.flush=function(){this.ondata||I(5),this.s.l&&I(4),this.p(this.b,!1),this.s.w=this.s.i,this.s.i-=2},t}();_e.Deflate=wt;var xt=function(){return function(t,n){ut([_,function(){return[at,wt]}],this,bt.call(this,t,n),(function(t){var n=new wt(t.data);onmessage=at(n)}),6,1)}}();function zt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_],(function(t){return it(kt(t.data[0],t.data[1]))}),0,r)}function kt(t,n){return K(t,n||{},0,0)}_e.AsyncDeflate=xt,_e.deflate=zt,_e.deflateSync=kt;var Mt=function(){function t(t,r){"function"==typeof t&&(r=t,t={}),this.ondata=r;var e=t&&t.dictionary&&t.dictionary.subarray(-32768);this.s={i:0,b:e?e.length:0},this.o=new n(32768),this.p=new n(0),e&&this.o.set(e)}return t.prototype.e=function(t){if(this.ondata||I(5),this.d&&I(4),this.p.length){if(t.length){var r=new n(this.p.length+t.length);r.set(this.p),r.set(t,this.p.length),this.p=r}}else this.p=t},t.prototype.c=function(t){this.s.i=+(this.d=t||!1);var n=this.s.b,r=U(this.p,this.s,this.o);this.ondata(D(r,n,this.s.b),this.d),this.o=D(r,this.s.b-32768),this.s.b=this.o.length,this.p=D(this.p,this.s.p/8|0),this.s.p&=7},t.prototype.push=function(t,n){this.e(t),this.c(n)},t}();_e.Inflate=Mt;var St=function(){return function(t,n){ut([$,function(){return[at,Mt]}],this,bt.call(this,t,n),(function(t){var n=new Mt(t.data);onmessage=at(n)}),7,0)}}();function At(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$],(function(t){return it(Tt(t.data[0],ot(t.data[1])))}),1,r)}function Tt(t,n){return U(t,{i:2},n&&n.out,n&&n.dictionary)}_e.AsyncInflate=St,_e.inflate=At,_e.inflateSync=Tt;var Dt=function(){function t(t,n){this.c=Y(),this.l=0,this.v=1,wt.call(this,t,n)}return t.prototype.push=function(t,n){this.c.p(t),this.l+=t.length,wt.prototype.push.call(this,t,n)},t.prototype.p=function(t,n){var r=K(t,this.o,this.v&&gt(this.o),n&&8,this.s);this.v&&(pt(r,this.o),this.v=0),n&&(ct(r,r.length-8,this.c.d()),ct(r,r.length-4,this.l)),this.ondata(r,n)},t.prototype.flush=function(){wt.prototype.flush.call(this)},t}();_e.Gzip=Dt,_e.Compress=Dt;var Ct=function(){return function(t,n){ut([_,tt,function(){return[at,wt,Dt]}],this,bt.call(this,t,n),(function(t){var n=new Dt(t.data);onmessage=at(n)}),8,1)}}();function It(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_,tt,function(){return[Ut]}],(function(t){return it(Ut(t.data[0],t.data[1]))}),2,r)}function Ut(t,n){n||(n={});var r=Y(),e=t.length;r.p(t);var i=K(t,n,gt(n),8),o=i.length;return pt(i,n),ct(i,o-8,r.d()),ct(i,o-4,e),i}_e.AsyncGzip=Ct,_e.AsyncCompress=Ct,_e.gzip=It,_e.compress=It,_e.gzipSync=Ut,_e.compressSync=Ut;var Ft=function(){function t(t,n){this.v=1,this.r=0,Mt.call(this,t,n)}return t.prototype.push=function(t,r){if(Mt.prototype.e.call(this,t),this.r+=t.length,this.v){var e=this.p.subarray(this.v-1),i=e.length>3?vt(e):4;if(i>e.length){if(!r)return}else this.v>1&&this.onmember&&this.onmember(this.r-e.length);this.p=e.subarray(i),this.v=0}Mt.prototype.c.call(this,r),!this.s.f||this.s.l||r||(this.v=T(this.s.p)+9,this.s={i:0},this.o=new n(0),this.push(new n(0),r))},t}();_e.Gunzip=Ft;var Et=function(){return function(t,n){var r=this;ut([$,nt,function(){return[at,Mt,Ft]}],this,bt.call(this,t,n),(function(t){var n=new Ft(t.data);n.onmember=function(t){return postMessage(t)},onmessage=at(n)}),9,0,(function(t){return r.onmember&&r.onmember(t)}))}}();function Zt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$,nt,function(){return[qt]}],(function(t){return it(qt(t.data[0],t.data[1]))}),3,r)}function qt(t,r){var e=vt(t);return e+8>t.length&&I(6,"invalid gzip data"),U(t.subarray(e,-8),{i:2},r&&r.out||new n(dt(t)),r&&r.dictionary)}_e.AsyncGunzip=Et,_e.gunzip=Zt,_e.gunzipSync=qt;var Ot=function(){function t(t,n){this.c=J(),this.v=1,wt.call(this,t,n)}return t.prototype.push=function(t,n){this.c.p(t),wt.prototype.push.call(this,t,n)},t.prototype.p=function(t,n){var r=K(t,this.o,this.v&&(this.o.dictionary?6:2),n&&4,this.s);this.v&&(yt(r,this.o),this.v=0),n&&ct(r,r.length-4,this.c.d()),this.ondata(r,n)},t.prototype.flush=function(){wt.prototype.flush.call(this)},t}();_e.Zlib=Ot;var Gt=function(){return function(t,n){ut([_,rt,function(){return[at,wt,Ot]}],this,bt.call(this,t,n),(function(t){var n=new Ot(t.data);onmessage=at(n)}),10,1)}}();function Lt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[_,rt,function(){return[Ht]}],(function(t){return it(Ht(t.data[0],t.data[1]))}),4,r)}function Ht(t,n){n||(n={});var r=J();r.p(t);var e=K(t,n,n.dictionary?6:2,4);return yt(e,n),ct(e,e.length-4,r.d()),e}_e.AsyncZlib=Gt,_e.zlib=Lt,_e.zlibSync=Ht;var jt=function(){function t(t,n){Mt.call(this,t,n),this.v=t&&t.dictionary?2:1}return t.prototype.push=function(t,n){if(Mt.prototype.e.call(this,t),this.v){if(this.p.length<6&&!n)return;this.p=this.p.subarray(mt(this.p,this.v-1)),this.v=0}n&&(this.p.length<4&&I(6,"invalid zlib data"),this.p=this.p.subarray(0,-4)),Mt.prototype.c.call(this,n)},t}();_e.Unzlib=jt;var Nt=function(){return function(t,n){ut([$,et,function(){return[at,Mt,jt]}],this,bt.call(this,t,n),(function(t){var n=new jt(t.data);onmessage=at(n)}),11,0)}}();function Pt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),st(t,n,[$,et,function(){return[Bt]}],(function(t){return it(Bt(t.data[0],ot(t.data[1])))}),5,r)}function Bt(t,n){return U(t.subarray(mt(t,n&&n.dictionary),-4),{i:2},n&&n.out,n&&n.dictionary)}_e.AsyncUnzlib=Nt,_e.unzlib=Pt,_e.unzlibSync=Bt;var Yt=function(){function t(t,n){this.o=bt.call(this,t,n)||{},this.G=Ft,this.I=Mt,this.Z=jt}return t.prototype.i=function(){var t=this;this.s.ondata=function(n,r){t.ondata(n,r)}},t.prototype.push=function(t,r){if(this.ondata||I(5),this.s)this.s.push(t,r);else{if(this.p&&this.p.length){var e=new n(this.p.length+t.length);e.set(this.p),e.set(t,this.p.length)}else this.p=t;this.p.length>2&&(this.s=31==this.p[0]&&139==this.p[1]&&8==this.p[2]?new this.G(this.o):8!=(15&this.p[0])||this.p[0]>>4>7||(this.p[0]<<8|this.p[1])%31?new this.I(this.o):new this.Z(this.o),this.i(),this.s.push(this.p,r),this.p=null)}},t}();_e.Decompress=Yt;var Jt=function(){function t(t,n){Yt.call(this,t,n),this.queuedSize=0,this.G=Et,this.I=St,this.Z=Nt}return t.prototype.i=function(){var t=this;this.s.ondata=function(n,r,e){t.ondata(n,r,e)},this.s.ondrain=function(n){t.queuedSize-=n,t.ondrain&&t.ondrain(n)}},t.prototype.push=function(t,n){this.queuedSize+=t.length,Yt.prototype.push.call(this,t,n)},t}();function Kt(t,n,r){return r||(r=n,n={}),"function"!=typeof r&&I(7),31==t[0]&&139==t[1]&&8==t[2]?Zt(t,n,r):8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31?At(t,n,r):Pt(t,n,r)}function Qt(t,n){return 31==t[0]&&139==t[1]&&8==t[2]?qt(t,n):8!=(15&t[0])||t[0]>>4>7||(t[0]<<8|t[1])%31?Tt(t,n):Bt(t,n)}_e.AsyncDecompress=Jt,_e.decompress=Kt,_e.decompressSync=Qt;var Rt=function(t,r,e,i){for(var o in t){var s=t[o],a=r+o,u=i;Array.isArray(s)&&(u=Q(i,s[1]),s=s[0]),s instanceof n?e[a]=[s,u]:(e[a+="/"]=[new n(0),u],Rt(s,a,e,i))}},Vt="undefined"!=typeof TextEncoder&&new TextEncoder,Wt="undefined"!=typeof TextDecoder&&new TextDecoder,Xt=0;try{Wt.decode(N,{stream:!0}),Xt=1}catch(t){}var $t=function(t){for(var n="",r=0;;){var e=t[r++],i=(e>127)+(e>223)+(e>239);if(r+i>t.length)return{s:n,r:D(t,r-1)};i?3==i?(e=((15&e)<<18|(63&t[r++])<<12|(63&t[r++])<<6|63&t[r++])-65536,n+=String.fromCharCode(55296|e>>10,56320|1023&e)):n+=String.fromCharCode(1&i?(31&e)<<6|63&t[r++]:(15&e)<<12|(63&t[r++])<<6|63&t[r++]):n+=String.fromCharCode(e)}},_t=function(){function t(t){this.ondata=t,Xt?this.t=new TextDecoder:this.p=N}return t.prototype.push=function(t,r){if(this.ondata||I(5),r=!!r,this.t)return this.ondata(this.t.decode(t,{stream:!0}),r),void(r&&(this.t.decode().length&&I(8),this.t=null));this.p||I(4);var e=new n(this.p.length+t.length);e.set(this.p),e.set(t,this.p.length);var i=$t(e),o=i.s,s=i.r;r?(s.length&&I(8),this.p=null):this.p=s,this.ondata(o,r)},t}();_e.DecodeUTF8=_t;var tn=function(){function t(t){this.ondata=t}return t.prototype.push=function(t,n){this.ondata||I(5),this.d&&I(4),this.ondata(nn(t),this.d=n||!1)},t}();function nn(t,r){if(r){for(var e=new n(t.length),i=0;i<t.length;++i)e[i]=t.charCodeAt(i);return e}if(Vt)return Vt.encode(t);var o=t.length,s=new n(t.length+(t.length>>1)),a=0,u=function(t){s[a++]=t};for(i=0;i<o;++i){if(a+5>s.length){var h=new n(a+8+(o-i<<1));h.set(s),s=h}var f=t.charCodeAt(i);f<128||r?u(f):f<2048?(u(192|f>>6),u(128|63&f)):f>55295&&f<57344?(u(240|(f=65536+(1047552&f)|1023&t.charCodeAt(++i))>>18),u(128|f>>12&63),u(128|f>>6&63),u(128|63&f)):(u(224|f>>12),u(128|f>>6&63),u(128|63&f))}return D(s,0,a)}function rn(t,n){if(n){for(var r="",e=0;e<t.length;e+=16384)r+=String.fromCharCode.apply(null,t.subarray(e,e+16384));return r}if(Wt)return Wt.decode(t);var i=$t(t),o=i.s;return(r=i.r).length&&I(8),o}_e.EncodeUTF8=tn,_e.strToU8=nn,_e.strFromU8=rn;var en=function(t){return 1==t?3:t<6?2:9==t?1:0},on=function(t,n){return n+30+ht(t,n+26)+ht(t,n+28)},sn=function(t,n,r){var e=ht(t,n+28),i=rn(t.subarray(n+46,n+46+e),!(2048&ht(t,n+8))),o=n+46+e,s=ft(t,n+20),a=r&&4294967295==s?an(t,o):[s,ft(t,n+24),ft(t,n+42)],u=a[0],h=a[1],f=a[2];return[ht(t,n+10),u,h,i,o+ht(t,n+30)+ht(t,n+32),f]},an=function(t,n){for(;1!=ht(t,n);n+=4+ht(t,n+2));return[lt(t,n+12),lt(t,n+4),lt(t,n+20)]},un=function(t){var n=0;if(t)for(var r in t){var e=t[r].length;e>65535&&I(9),n+=e+4}return n},hn=function(t,n,r,e,i,o,s,a){var u=e.length,h=r.extra,f=a&&a.length,l=un(h);ct(t,n,null!=s?33639248:67324752),n+=4,null!=s&&(t[n++]=20,t[n++]=r.os),t[n]=20,n+=2,t[n++]=r.flag<<1|(o<0&&8),t[n++]=i&&8,t[n++]=255&r.compression,t[n++]=r.compression>>8;var c=new Date(null==r.mtime?Date.now():r.mtime),p=c.getFullYear()-1980;if((p<0||p>119)&&I(10),ct(t,n,p<<25|c.getMonth()+1<<21|c.getDate()<<16|c.getHours()<<11|c.getMinutes()<<5|c.getSeconds()>>1),n+=4,-1!=o&&(ct(t,n,r.crc),ct(t,n+4,o<0?-o-2:o),ct(t,n+8,r.size)),ct(t,n+12,u),ct(t,n+14,l),n+=16,null!=s&&(ct(t,n,f),ct(t,n+6,r.attrs),ct(t,n+10,s),n+=14),t.set(e,n),n+=u,l)for(var v in h){var d=h[v],g=d.length;ct(t,n,+v),ct(t,n+2,g),t.set(d,n+4),n+=4+g}return f&&(t.set(a,n),n+=f),n},fn=function(t,n,r,e,i){ct(t,n,101010256),ct(t,n+8,r),ct(t,n+10,r),ct(t,n+12,e),ct(t,n+16,i)},ln=function(){function t(t){this.filename=t,this.c=Y(),this.size=0,this.compression=0}return t.prototype.process=function(t,n){this.ondata(null,t,n)},t.prototype.push=function(t,n){this.ondata||I(5),this.c.p(t),this.size+=t.length,n&&(this.crc=this.c.d()),this.process(t,n||!1)},t}();_e.ZipPassThrough=ln;var cn=function(){function t(t,n){var r=this;n||(n={}),ln.call(this,t),this.d=new wt(n,(function(t,n){r.ondata(null,t,n)})),this.compression=8,this.flag=en(n.level)}return t.prototype.process=function(t,n){try{this.d.push(t,n)}catch(t){this.ondata(t,null,n)}},t.prototype.push=function(t,n){ln.prototype.push.call(this,t,n)},t}();_e.ZipDeflate=cn;var pn=function(){function t(t,n){var r=this;n||(n={}),ln.call(this,t),this.d=new xt(n,(function(t,n,e){r.ondata(t,n,e)})),this.compression=8,this.flag=en(n.level),this.terminate=this.d.terminate}return t.prototype.process=function(t,n){this.d.push(t,n)},t.prototype.push=function(t,n){ln.prototype.push.call(this,t,n)},t}();_e.AsyncZipDeflate=pn;var vn=function(){function t(t){this.ondata=t,this.u=[],this.d=1}return t.prototype.add=function(t){var r=this;if(this.ondata||I(5),2&this.d)this.ondata(I(4+8*(1&this.d),0,1),null,!1);else{var e=nn(t.filename),i=e.length,o=t.comment,s=o&&nn(o),a=i!=t.filename.length||s&&o.length!=s.length,u=i+un(t.extra)+30;i>65535&&this.ondata(I(11,0,1),null,!1);var h=new n(u);hn(h,0,t,e,a,-1);var f=[h],l=function(){for(var t=0,n=f;t<n.length;t++)r.ondata(null,n[t],!1);f=[]},c=this.d;this.d=0;var p=this.u.length,v=Q(t,{f:e,u:a,o:s,t:function(){t.terminate&&t.terminate()},r:function(){if(l(),c){var t=r.u[p+1];t?t.r():r.d=1}c=1}}),d=0;t.ondata=function(e,i,o){if(e)r.ondata(e,i,o),r.terminate();else if(d+=i.length,f.push(i),o){var s=new n(16);ct(s,0,134695760),ct(s,4,t.crc),ct(s,8,d),ct(s,12,t.size),f.push(s),v.c=d,v.b=u+d+16,v.crc=t.crc,v.size=t.size,c&&v.r(),c=1}else c&&l()},this.u.push(v)}},t.prototype.end=function(){var t=this;2&this.d?this.ondata(I(4+8*(1&this.d),0,1),null,!0):(this.d?this.e():this.u.push({r:function(){1&t.d&&(t.u.splice(-1,1),t.e())},t:function(){}}),this.d=3)},t.prototype.e=function(){for(var t=0,r=0,e=0,i=0,o=this.u;i<o.length;i++)e+=46+(h=o[i]).f.length+un(h.extra)+(h.o?h.o.length:0);for(var s=new n(e+22),a=0,u=this.u;a<u.length;a++){var h;hn(s,t,h=u[a],h.f,h.u,-h.c-2,r,h.o),t+=46+h.f.length+un(h.extra)+(h.o?h.o.length:0),r+=h.b}fn(s,t,this.u.length,e,r),this.ondata(null,s,!0),this.d=2},t.prototype.terminate=function(){for(var t=0,n=this.u;t<n.length;t++)n[t].t();this.d=2},t}();function dn(t,r,e){e||(e=r,r={}),"function"!=typeof e&&I(7);var i={};Rt(t,"",i,r);var o=Object.keys(i),s=o.length,a=0,u=0,h=s,f=Array(s),l=[],c=function(){for(var t=0;t<l.length;++t)l[t]()},p=function(t,n){xn((function(){e(t,n)}))};xn((function(){p=e}));var v=function(){var t=new n(u+22),r=a,e=u-a;u=0;for(var i=0;i<h;++i){var o=f[i];try{var s=o.c.length;hn(t,u,o,o.f,o.u,s);var l=30+o.f.length+un(o.extra),c=u+l;t.set(o.c,c),hn(t,a,o,o.f,o.u,s,u,o.m),a+=16+l+(o.m?o.m.length:0),u=c+s}catch(t){return p(t,null)}}fn(t,a,f.length,e,r),p(null,t)};s||v();for(var d=function(t){var n=o[t],r=i[n],e=r[0],h=r[1],d=Y(),g=e.length;d.p(e);var y=nn(n),m=y.length,b=h.comment,w=b&&nn(b),x=w&&w.length,z=un(h.extra),k=0==h.level?0:8,M=function(r,e){if(r)c(),p(r,null);else{var i=e.length;f[t]=Q(h,{size:g,crc:d.d(),c:e,f:y,m:w,u:m!=n.length||w&&b.length!=x,compression:k}),a+=30+m+z+i,u+=76+2*(m+z)+(x||0)+i,--s||v()}};if(m>65535&&M(I(11,0,1),null),k)if(g<16e4)try{M(null,kt(e,h))}catch(t){M(t,null)}else l.push(zt(e,h,M));else M(null,e)},g=0;g<h;++g)d(g);return c}function gn(t,r){r||(r={});var e={},i=[];Rt(t,"",e,r);var o=0,s=0;for(var a in e){var u=e[a],h=u[0],f=u[1],l=0==f.level?0:8,c=(M=nn(a)).length,p=f.comment,v=p&&nn(p),d=v&&v.length,g=un(f.extra);c>65535&&I(11);var y=l?kt(h,f):h,m=y.length,b=Y();b.p(h),i.push(Q(f,{size:h.length,crc:b.d(),c:y,f:M,m:v,u:c!=a.length||v&&p.length!=d,o:o,compression:l})),o+=30+c+g+m,s+=76+2*(c+g)+(d||0)+m}for(var w=new n(s+22),x=o,z=s-o,k=0;k<i.length;++k){var M;hn(w,(M=i[k]).o,M,M.f,M.u,M.c.length);var S=30+M.f.length+un(M.extra);w.set(M.c,M.o+S),hn(w,o,M,M.f,M.u,M.c.length,M.o,M.m),o+=16+S+(M.m?M.m.length:0)}return fn(w,o,i.length,z,x),w}_e.Zip=vn,_e.zip=dn,_e.zipSync=gn;var yn=function(){function t(){}return t.prototype.push=function(t,n){this.ondata(null,t,n)},t.compression=0,t}();_e.UnzipPassThrough=yn;var mn=function(){function t(){var t=this;this.i=new Mt((function(n,r){t.ondata(null,n,r)}))}return t.prototype.push=function(t,n){try{this.i.push(t,n)}catch(t){this.ondata(t,null,n)}},t.compression=8,t}();_e.UnzipInflate=mn;var bn=function(){function t(t,n){var r=this;n<32e4?this.i=new Mt((function(t,n){r.ondata(null,t,n)})):(this.i=new St((function(t,n,e){r.ondata(t,n,e)})),this.terminate=this.i.terminate)}return t.prototype.push=function(t,n){this.i.terminate&&(t=D(t,0)),this.i.push(t,n)},t.compression=8,t}();_e.AsyncUnzipInflate=bn;var wn=function(){function t(t){this.onfile=t,this.k=[],this.o={0:yn},this.p=N}return t.prototype.push=function(t,r){var e=this;if(this.onfile||I(5),this.p||I(4),this.c>0){var i=Math.min(this.c,t.length),o=t.subarray(0,i);if(this.c-=i,this.d?this.d.push(o,!this.c):this.k[0].push(o),(t=t.subarray(i)).length)return this.push(t,r)}else{var s=0,a=0,u=void 0,h=void 0;this.p.length?t.length?((h=new n(this.p.length+t.length)).set(this.p),h.set(t,this.p.length)):h=this.p:h=t;for(var f=h.length,l=this.c,c=l&&this.d,p=function(){var t,n=ft(h,a);if(67324752==n){s=1,u=a,v.d=null,v.c=0;var r=ht(h,a+6),i=ht(h,a+8),o=2048&r,c=8&r,p=ht(h,a+26),d=ht(h,a+28);if(f>a+30+p+d){var g=[];v.k.unshift(g),s=2;var y,m=ft(h,a+18),b=ft(h,a+22),w=rn(h.subarray(a+30,a+=30+p),!o);4294967295==m?(t=c?[-2]:an(h,a),m=t[0],b=t[1]):c&&(m=-1),a+=d,v.c=m;var x={name:w,compression:i,start:function(){if(x.ondata||I(5),m){var t=e.o[i];t||x.ondata(I(14,"unknown compression type "+i,1),null,!1),(y=m<0?new t(w):new t(w,m,b)).ondata=function(t,n,r){x.ondata(t,n,r)};for(var n=0,r=g;n<r.length;n++)y.push(r[n],!1);e.k[0]==g&&e.c?e.d=y:y.push(N,!0)}else x.ondata(null,N,!0)},terminate:function(){y&&y.terminate&&y.terminate()}};m>=0&&(x.size=m,x.originalSize=b),v.onfile(x)}return"break"}if(l){if(134695760==n)return u=a+=12+(-2==l&&8),s=3,v.c=0,"break";if(33639248==n)return u=a-=4,s=3,v.c=0,"break"}},v=this;a<f-4&&"break"!==p();++a);if(this.p=N,l<0){var d=h.subarray(0,s?u-12-(-2==l&&8)-(134695760==ft(h,u-16)&&4):a);c?c.push(d,!!s):this.k[+(2==s)].push(d)}if(2&s)return this.push(h.subarray(a),r);this.p=h.subarray(a)}r&&(this.c&&I(13),this.p=null)},t.prototype.register=function(t){this.o[t.compression]=t},t}();_e.Unzip=wn;var xn="function"==typeof queueMicrotask?queueMicrotask:"function"==typeof setTimeout?setTimeout:function(t){t()};function zn(t,r,e){e||(e=r,r={}),"function"!=typeof e&&I(7);var i=[],o=function(){for(var t=0;t<i.length;++t)i[t]()},s={},a=function(t,n){xn((function(){e(t,n)}))};xn((function(){a=e}));for(var u=t.length-22;101010256!=ft(t,u);--u)if(!u||t.length-u>65558)return a(I(13,0,1),null),o;var h=ht(t,u+8);if(h){var f=h,l=ft(t,u+16),c=4294967295==l||65535==f;if(c){var p=ft(t,u-12);(c=101075792==ft(t,p))&&(f=h=ft(t,p+32),l=ft(t,p+48))}for(var v=r&&r.filter,d=function(r){var e=sn(t,l,c),u=e[0],f=e[1],p=e[2],d=e[3],g=e[4],y=on(t,e[5]);l=g;var m=function(t,n){t?(o(),a(t,null)):(n&&(s[d]=n),--h||a(null,s))};if(!v||v({name:d,size:f,originalSize:p,compression:u}))if(u)if(8==u){var b=t.subarray(y,y+f);if(p<524288||f>.8*p)try{m(null,Tt(b,{out:new n(p)}))}catch(t){m(t,null)}else i.push(At(b,{size:p},m))}else m(I(14,"unknown compression type "+u,1),null);else m(null,D(t,y,y+f));else m(null,null)},g=0;g<f;++g)d()}else a(null,{});return o}function kn(t,r){for(var e={},i=t.length-22;101010256!=ft(t,i);--i)(!i||t.length-i>65558)&&I(13);var o=ht(t,i+8);if(!o)return{};var s=ft(t,i+16),a=4294967295==s||65535==o;if(a){var u=ft(t,i-12);(a=101075792==ft(t,u))&&(o=ft(t,u+32),s=ft(t,u+48))}for(var h=r&&r.filter,f=0;f<o;++f){var l=sn(t,s,a),c=l[0],p=l[1],v=l[2],d=l[3],g=l[4],y=on(t,l[5]);s=g,h&&!h({name:d,size:p,originalSize:v,compression:c})||(c?8==c?e[d]=Tt(t.subarray(y,y+p),{out:new n(v)}):I(14,"unknown compression type "+c):e[d]=D(t,y,y+p))}return e}_e.unzip=zn,_e.unzipSync=kn;return _e});
+</script>
+<script>
+
+'use strict';
+
+// ============================================================
+// WORKER — indexação, busca, filtros e árvore fora da thread da interface
+// ============================================================
+function workerMain() {
+  'use strict';
+
+  let records = [];
+  let byPath = new Map();
+  let dirIndex = new Map();
+  let naturalSort = true;
+
+  function natKey(value) {
+    return String(value).toLocaleLowerCase('pt-BR').replace(/(\d+)/g, function (part) {
+      return part.padStart(20, '0');
+    });
+  }
+
+  function compareText(a, b) {
+    const ka = naturalSort ? natKey(a) : String(a).toLocaleLowerCase('pt-BR');
+    const kb = naturalSort ? natKey(b) : String(b).toLocaleLowerCase('pt-BR');
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  }
+
+  function ensureDir(path) {
+    let node = dirIndex.get(path);
+    if (!node) {
+      node = { dirs: new Map(), files: [], total: 0 };
+      dirIndex.set(path, node);
+    }
+    return node;
+  }
+
+  function rebuildDirectoryIndex() {
+    dirIndex = new Map();
+    ensureDir('');
+
+    for (const rec of records) {
+      const parts = rec.relPath.split('/').filter(Boolean);
+      if (!parts.length) continue;
+
+      // Incrementa o total de arquivos de cada diretório ancestral.
+      for (let i = 0; i < parts.length; i++) {
+        const parentPath = parts.slice(0, i).join('/');
+        const parent = ensureDir(parentPath);
+        parent.total++;
+        if (i < parts.length - 1) {
+          const childPath = parts.slice(0, i + 1).join('/');
+          parent.dirs.set(parts[i], childPath);
+          ensureDir(childPath);
+        }
+      }
+
+      const fileParent = parts.slice(0, -1).join('/');
+      ensureDir(fileParent).files.push(rec.relPath);
+    }
+  }
+
+  function finalizeIndex(sortMode) {
+    naturalSort = sortMode !== 'alpha';
+    records.sort(function (a, b) { return compareText(a.relPath, b.relPath); });
+    byPath = new Map(records.map(function (rec) { return [rec.relPath, rec]; }));
+
+    const extMap = new Map();
+    for (const rec of records) {
+      let info = extMap.get(rec.ext);
+      if (!info) {
+        info = { ext: rec.ext, count: 0, size: 0, binary: rec.isBinary };
+        extMap.set(rec.ext, info);
+      }
+      info.count++;
+      info.size += rec.size;
+      info.binary = info.binary || rec.isBinary;
+    }
+
+    const extensions = Array.from(extMap.values()).sort(function (a, b) {
+      return compareText(a.ext, b.ext);
+    });
+
+    rebuildDirectoryIndex();
+    return {
+      paths: records.map(function (rec) { return rec.relPath; }),
+      extensions: extensions
+    };
+  }
+
+  function treeChildren(path, offset, limit) {
+    const node = dirIndex.get(path) || { dirs: new Map(), files: [], total: 0 };
+    const dirs = Array.from(node.dirs.entries()).map(function (entry) {
+      const name = entry[0];
+      const childPath = entry[1];
+      const child = dirIndex.get(childPath);
+      return {
+        type: 'dir',
+        name: name,
+        path: childPath,
+        total: child ? child.total : 0
+      };
+    }).sort(function (a, b) { return compareText(a.name, b.name); });
+
+    const files = node.files.map(function (relPath) {
+      const rec = byPath.get(relPath);
+      return {
+        type: 'file',
+        name: rec.name,
+        path: rec.relPath,
+        size: rec.size,
+        isBinary: rec.isBinary
+      };
+    }).sort(function (a, b) { return compareText(a.name, b.name); });
+
+    const all = dirs.concat(files);
+    const start = Math.max(0, Number(offset) || 0);
+    const pageSize = Math.max(1, Number(limit) || 500);
+    return {
+      items: all.slice(start, start + pageSize),
+      totalItems: all.length,
+      directoryTotal: node.total
+    };
+  }
+
+  function descendantPaths(path) {
+    if (!path) return records.map(function (rec) { return rec.relPath; });
+    const prefix = path + '/';
+    return records.filter(function (rec) {
+      return rec.relPath.startsWith(prefix);
+    }).map(function (rec) { return rec.relPath; });
+  }
+
+  function parseSearchTerms(raw) {
+    const terms = [];
+    const lines = String(raw || '').split(/\r?\n/);
+    for (let line of lines) {
+      line = line.trim();
+      if (!line) continue;
+      line = line.replace(/^(modified:|new file:|deleted:|renamed:)\s*/i, '').trim();
+      if (line.includes('->')) line = line.split('->').pop().trim();
+      const pieces = line.split(/[\s,]+/).filter(Boolean);
+      terms.push.apply(terms, pieces);
+    }
+    return terms;
+  }
+
+  function searchPaths(raw) {
+    const terms = parseSearchTerms(raw);
+    if (!terms.length) return records.map(function (rec) { return rec.relPath; });
+    const found = [];
+
+    for (const rec of records) {
+      const rp = rec.relPath.replace(/\\/g, '/').toLocaleLowerCase('pt-BR');
+      const name = rec.name.toLocaleLowerCase('pt-BR');
+      const noExt = name.replace(/\.[^.]+$/, '');
+      let match = false;
+      for (let term of terms) {
+        term = term.replace(/\\/g, '/').toLocaleLowerCase('pt-BR');
+        if (term.includes('/')) {
+          match = rp.endsWith(term);
+        } else {
+          match = name === term || noExt === term;
+        }
+        if (match) break;
+      }
+      if (match) found.push(rec.relPath);
+    }
+    return found;
+  }
+
+  function containsPaths(query) {
+    const q = String(query || '').toLocaleLowerCase('pt-BR');
+    if (!q) return records.map(function (rec) { return rec.relPath; });
+    return records.filter(function (rec) {
+      return rec.relPath.toLocaleLowerCase('pt-BR').includes(q);
+    }).map(function (rec) { return rec.relPath; });
+  }
+
+  function regexEscape(value) {
+    return String(value).replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function giMatches(relPath, rules, applyGI) {
+    if (!applyGI) return false;
+    const norm = relPath.replace(/\\/g, '/');
+    let ignored = false;
+
+    for (const rawValue of rules || []) {
+      let raw = String(rawValue || '').trim();
+      if (!raw || raw.startsWith('#')) continue;
+      const negated = raw.startsWith('!');
+      if (negated) raw = raw.slice(1).trim();
+      if (!raw) continue;
+      if (raw.endsWith('/')) raw = raw.slice(0, -1);
+
+      const escaped = regexEscape(raw)
+        .replace(/\*\*/g, '§§DOUBLESTAR§§')
+        .replace(/\*/g, '[^/]*')
+        .replace(/\?/g, '[^/]')
+        .replace(/§§DOUBLESTAR§§/g, '.*');
+
+      let matched = false;
+      try {
+        if (raw.includes('/')) {
+          matched = new RegExp('^' + escaped + '(/.*)?$').test(norm);
+        } else {
+          const base = norm.split('/').pop();
+          matched = new RegExp('^' + escaped + '$').test(base) ||
+            new RegExp('(^|/)' + escaped + '(/|$)').test(norm);
+        }
+      } catch (_) {
+        matched = false;
+      }
+      if (matched) ignored = !negated;
+    }
+    return ignored;
+  }
+
+  function giPreview(rules, limit) {
+    const max = Math.max(1, Number(limit) || 400);
+    return records.slice(0, max).map(function (rec) {
+      return { path: rec.relPath, ignored: giMatches(rec.relPath, rules, true) };
+    });
+  }
+
+  function matchesSimplePattern(name, pattern) {
+    const escaped = regexEscape(pattern).replace(/\*/g, '.*').replace(/\?/g, '.');
+    try { return new RegExp('^' + escaped + '$', 'i').test(name); }
+    catch (_) { return false; }
+  }
+
+  function ignoredByPatterns(relPath, patterns) {
+    if (!patterns || !patterns.length) return false;
+    return relPath.split('/').some(function (part) {
+      return patterns.some(function (pattern) {
+        return pattern.includes('*') ? matchesSimplePattern(part, pattern) :
+          part.toLocaleLowerCase('pt-BR') === String(pattern).toLocaleLowerCase('pt-BR');
+      });
+    });
+  }
+
+  function filterOutput(options) {
+    const mode = options.mode;
+    const selectedPaths = new Set(options.selectedPaths || []);
+    const selectedExts = new Set(options.selectedExts || []);
+    const rules = options.rules || [];
+    const ignorePatterns = options.ignorePatterns || [];
+    const applyGI = Boolean(options.applyGI);
+    const result = [];
+
+    for (const rec of records) {
+      if (rec.isBinary) continue;
+      if (ignoredByPatterns(rec.relPath, ignorePatterns)) continue;
+      if (applyGI && giMatches(rec.relPath, rules, true)) continue;
+
+      let include = false;
+      if (mode === 'ext') include = selectedExts.has(rec.ext);
+      else if (mode === 'selected') include = selectedPaths.has(rec.relPath);
+      else if (mode === 'all') include = true;
+
+      if (include) result.push(rec.relPath);
+    }
+    return result;
+  }
+
+  function buildTreeText(paths, rootName) {
+    const selected = new Set(paths || []);
+    const root = { children: new Map(), files: [] };
+
+    for (const rec of records) {
+      if (!selected.has(rec.relPath)) continue;
+      const parts = rec.relPath.split('/').filter(Boolean);
+      let node = root;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (!node.children.has(parts[i])) {
+          node.children.set(parts[i], { children: new Map(), files: [] });
+        }
+        node = node.children.get(parts[i]);
+      }
+      node.files.push(parts[parts.length - 1] || rec.name);
+    }
+
+    function printNode(node, prefix) {
+      let out = '';
+      const dirs = Array.from(node.children.entries()).sort(function (a, b) {
+        return compareText(a[0], b[0]);
+      }).map(function (entry) {
+        return { type: 'dir', name: entry[0], node: entry[1] };
+      });
+      const files = node.files.slice().sort(compareText).map(function (name) {
+        return { type: 'file', name: name };
+      });
+      const items = dirs.concat(files);
+
+      items.forEach(function (item, index) {
+        const last = index === items.length - 1;
+        out += prefix + (last ? '`-- ' : '|-- ') + item.name + '\n';
+        if (item.type === 'dir') {
+          out += printNode(item.node, prefix + (last ? '  ' : '| '));
+        }
+      });
+      return out;
+    }
+
+    return String(rootName || 'Entrada') + '\n' + printNode(root, '');
+  }
+
+  function reply(requestId, result) {
+    self.postMessage({ requestId: requestId, ok: true, result: result });
+  }
+
+  function fail(requestId, error) {
+    self.postMessage({
+      requestId: requestId,
+      ok: false,
+      error: error && error.message ? error.message : String(error)
+    });
+  }
+
+  self.onmessage = function (event) {
+    const msg = event.data || {};
+    try {
+      switch (msg.type) {
+        case 'reset':
+          records = [];
+          byPath = new Map();
+          dirIndex = new Map();
+          reply(msg.requestId, true);
+          break;
+        case 'addBatch':
+          records.push.apply(records, msg.records || []);
+          break;
+        case 'finalize':
+          reply(msg.requestId, finalizeIndex(msg.sortMode));
+          break;
+        case 'contains':
+          reply(msg.requestId, containsPaths(msg.query));
+          break;
+        case 'search':
+          reply(msg.requestId, searchPaths(msg.raw));
+          break;
+        case 'treeChildren':
+          reply(msg.requestId, treeChildren(msg.path || '', msg.offset, msg.limit));
+          break;
+        case 'descendants':
+          reply(msg.requestId, descendantPaths(msg.path || ''));
+          break;
+        case 'giPreview':
+          reply(msg.requestId, giPreview(msg.rules || [], msg.limit));
+          break;
+        case 'filterOutput':
+          reply(msg.requestId, filterOutput(msg));
+          break;
+        case 'buildTreeText':
+          reply(msg.requestId, buildTreeText(msg.paths || [], msg.rootName));
+          break;
+        default:
+          throw new Error('Mensagem desconhecida para o Worker: ' + msg.type);
+      }
+    } catch (error) {
+      fail(msg.requestId, error);
+    }
+  };
+}
+
+// ============================================================
+// WORKER DE ZIP — a biblioteca fflate é anexada ao código deste Worker
+// ============================================================
+function zipWorkerMain() {
+  'use strict';
+
+  const BINARY = new Set([
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp',
+    '.mp3', '.mp4', '.avi', '.mov', '.mkv', '.wav', '.ogg',
+    '.zip', '.tar', '.gz', '.rar', '.7z',
+    '.exe', '.dll', '.so', '.dylib', '.bin', '.dat',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.ttf', '.woff', '.woff2', '.eot', '.db', '.sqlite', '.sqlite3'
+  ]);
+
+  function getExt(name) {
+    const dot = name.lastIndexOf('.');
+    if (dot <= 0) return name.startsWith('.') ? name : '(sem extensão)';
+    return name.slice(dot).toLocaleLowerCase('pt-BR');
+  }
+
+  function escapeRegex(value) {
+    return String(value).replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function matchesPattern(name, pattern) {
+    const source = escapeRegex(pattern).replace(/\*/g, '.*').replace(/\?/g, '.');
+    try { return new RegExp('^' + source + '$', 'i').test(name); }
+    catch (_) { return false; }
+  }
+
+  function isIgnored(path, patterns) {
+    return path.split('/').some(function (part) {
+      return patterns.some(function (pattern) {
+        return pattern.includes('*') ? matchesPattern(part, pattern) :
+          part.toLocaleLowerCase('pt-BR') === String(pattern).toLocaleLowerCase('pt-BR');
+      });
+    });
+  }
+
+  function normalizePath(rawName) {
+    let path = String(rawName || '').replace(/\\/g, '/');
+    if (!path || path.includes('\0') || path.startsWith('/') || /^[a-zA-Z]:\//.test(path)) return null;
+    while (path.startsWith('./')) path = path.slice(2);
+    const originalParts = path.split('/');
+    if (originalParts.some(function (part) { return part === '..'; })) return null;
+    const parts = originalParts.filter(function (part) { return part && part !== '.'; });
+    if (!parts.length) return null;
+    return parts.join('/');
+  }
+
+  function safeRootName(filename) {
+    let value = String(filename || 'zip').replace(/\.zip$/i, '').replace(/[\\/\0:]+/g, '-').trim();
+    if (!value || value === '.' || value === '..') value = 'zip';
+    return value;
+  }
+
+  self.onmessage = async function (event) {
+    const msg = event.data || {};
+    if (msg.type !== 'extract') return;
+    const file = msg.file;
+    const options = msg.options || {};
+
+    try {
+      if (!self.fflate || typeof self.fflate.unzipSync !== 'function') {
+        throw new Error('A biblioteca de ZIP não foi carregada no Worker.');
+      }
+
+      self.postMessage({ type: 'progress', phase: 'reading', loaded: 0, total: file.size || 0 });
+      const compressed = new Uint8Array(await file.arrayBuffer());
+      self.postMessage({ type: 'progress', phase: 'extracting', loaded: 0, total: compressed.length });
+
+      const accepted = new Map();
+      const seenCleanPaths = new Set();
+      const warnings = { unsafe: 0, ignored: 0, size: 0, binary: 0, duplicate: 0 };
+      let entryCount = 0;
+      let selectedBytes = 0;
+
+      const extracted = self.fflate.unzipSync(compressed, {
+        filter: function (info) {
+          const rawName = String(info.name || '');
+          if (!rawName || rawName.endsWith('/')) return false;
+          entryCount++;
+          if (entryCount > options.maxEntries) {
+            throw new Error('O ZIP ultrapassa o limite de ' + options.maxEntries + ' arquivos.');
+          }
+
+          const cleanPath = normalizePath(rawName);
+          if (!cleanPath) { warnings.unsafe++; return false; }
+          if (cleanPath.split('/').some(function (part) { return part === '__MACOSX'; })) {
+            warnings.ignored++;
+            return false;
+          }
+          if (isIgnored(cleanPath, options.ignorePatterns || [])) {
+            warnings.ignored++;
+            return false;
+          }
+          if (seenCleanPaths.has(cleanPath.toLocaleLowerCase('pt-BR'))) {
+            warnings.duplicate++;
+            return false;
+          }
+          seenCleanPaths.add(cleanPath.toLocaleLowerCase('pt-BR'));
+
+          const originalSize = Math.max(0, Number(info.originalSize) || 0);
+          const compressedSize = Math.max(0, Number(info.size) || 0);
+          if ((options.userMaxBytes && originalSize > options.userMaxBytes) ||
+              originalSize > options.maxFileBytes) {
+            warnings.size++;
+            return false;
+          }
+          if (compressedSize > 0 && originalSize > 1024 * 1024 &&
+              originalSize / compressedSize > options.maxRatio) {
+            throw new Error('Taxa de compressão suspeita detectada em: ' + cleanPath);
+          }
+
+          const name = cleanPath.split('/').pop();
+          const ext = getExt(name);
+          const binary = BINARY.has(ext);
+          accepted.set(rawName, {
+            rawName: rawName,
+            cleanPath: cleanPath,
+            name: name,
+            size: originalSize,
+            isBinary: binary
+          });
+
+          if (binary) {
+            warnings.binary++;
+            return false; // aparece na lista, mas não precisa ser descompactado
+          }
+
+          selectedBytes += originalSize;
+          if (selectedBytes > options.maxTotalBytes) {
+            throw new Error('O conteúdo descompactado ultrapassa o limite de segurança de ' +
+              Math.round(options.maxTotalBytes / 1024 / 1024) + ' MB.');
+          }
+
+          if (entryCount % 250 === 0) {
+            self.postMessage({
+              type: 'progress', phase: 'extracting', entries: entryCount,
+              uncompressed: selectedBytes, total: compressed.length
+            });
+          }
+          return true;
+        }
+      });
+
+      const records = Array.from(accepted.values());
+      const firstParts = new Set();
+      let hasRootFiles = false;
+      records.forEach(function (record) {
+        const parts = record.cleanPath.split('/');
+        firstParts.add(parts[0]);
+        if (parts.length === 1) hasRootFiles = true;
+      });
+      const preserveSingleRoot = !hasRootFiles && firstParts.size === 1;
+      const zipRoot = safeRootName(file.name);
+      const sourceName = preserveSingleRoot ? Array.from(firstParts)[0] : zipRoot;
+
+      let batch = [];
+      let transfers = [];
+      let delivered = 0;
+
+      function flush() {
+        if (!batch.length) return;
+        self.postMessage({ type: 'batch', entries: batch }, transfers);
+        batch = [];
+        transfers = [];
+      }
+
+      for (const record of records) {
+        const relPath = preserveSingleRoot ? record.cleanPath : zipRoot + '/' + record.cleanPath;
+        const bytes = record.isBinary ? null : extracted[record.rawName];
+        let data = null;
+        if (bytes) {
+          const exact = bytes.slice();
+          data = exact.buffer;
+          transfers.push(data);
+        }
+        batch.push({
+          name: record.name,
+          relPath: relPath,
+          size: record.size,
+          isBinary: record.isBinary,
+          data: data
+        });
+        delivered++;
+        if (batch.length >= 40) flush();
+      }
+      flush();
+
+      self.postMessage({
+        type: 'done',
+        sourceName: sourceName,
+        included: delivered,
+        scanned: entryCount,
+        selectedBytes: selectedBytes,
+        warnings: warnings
+      });
+    } catch (error) {
+      self.postMessage({
+        type: 'error',
+        message: error && error.message ? error.message : String(error)
+      });
+    }
+  };
+}
+
+// ============================================================
+// CONSTANTES E ESTADO
+// ============================================================
+const SEP = '='.repeat(42);
+const IGNORE_STORAGE_KEY = 'copier:ignorePatterns:v1';
+const PATTERN_GROUPS = [
+  { id: 'vcs', label: 'Controle de versão', patterns: [
+    ['.git', 'Metadados do repositório Git']
+  ] },
+  { id: 'node', label: 'Node.js / JavaScript', patterns: [
+    ['node_modules', 'Dependências do Node.js'],
+    ['dist', 'Saída de build compilada'],
+    ['build', 'Diretório de build'],
+    ['*.log', 'Arquivos de log']
+  ] },
+  { id: 'python', label: 'Python', patterns: [
+    ['__pycache__', 'Cache de bytecode do Python'],
+    ['venv', 'Ambiente virtual Python'],
+    ['.venv', 'Ambiente virtual Python oculto'],
+    ['env', 'Ambiente virtual Python'],
+    ['.env', 'Ambiente e variáveis locais'],
+    ['.tox', 'Cache do Tox'],
+    ['.mypy_cache', 'Cache do MyPy'],
+    ['.pytest_cache', 'Cache do Pytest'],
+    ['*.pyc', 'Bytecode Python compilado'],
+    ['*.pyo', 'Bytecode Python otimizado'],
+    ['*.egg-info', 'Metadados de pacote Python']
+  ] },
+  { id: 'os', label: 'Sistema operacional', patterns: [
+    ['.DS_Store', 'Metadados de pasta do macOS'],
+    ['Thumbs.db', 'Cache de miniaturas do Windows']
+  ] }
+];
+const ALL_IGNORE_PATTERNS = PATTERN_GROUPS.flatMap(function (group) {
+  return group.patterns.map(function (item) { return item[0]; });
+});
+const BINARY_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.svg', '.webp',
+  '.mp3', '.mp4', '.avi', '.mov', '.mkv', '.wav', '.ogg',
+  '.zip', '.tar', '.gz', '.rar', '.7z',
+  '.exe', '.dll', '.so', '.dylib', '.bin', '.dat',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.ttf', '.woff', '.woff2', '.eot',
+  '.db', '.sqlite', '.sqlite3'
+]);
+const TREE_PAGE_SIZE = 500;
+const META_BATCH_SIZE = 300;
+const OUTPUT_CONCURRENCY = 6;
+const MODAL_PREVIEW_BYTES = 700 * 1024;
+const ZIP_MAX_ENTRIES = 100000;
+const ZIP_MAX_FILE_BYTES = 64 * 1024 * 1024;
+const ZIP_MAX_RATIO = 500;
+const ZIP_MAX_INPUT_MOBILE = 512 * 1024 * 1024;
+const ZIP_MAX_INPUT_DESKTOP = 1024 * 1024 * 1024;
+
+const S = {
+  allMeta: [],
+  metaByPath: new Map(),
+  extStats: [],
+  allExts: [],
+  selectedFiles: new Set(),
+  selectedExts: new Set(),
+  selectedLines: 0,
+  selectedBytes: 0,
+  dirSelectedCounts: new Map(),
+  arbFiles: [],
+  arbChecked: new Set(),
+  nextArbId: 1,
+  giFileRules: [],
+  giManualRules: [],
+  giSelIdx: -1,
+  applyGI: false,
+  ignorePatterns: [],
+  extSort: { col: null, dir: 'asc' },
+  filtersDirty: false,
+  lastOutputBlob: null,
+  lastOutputName: 'codigo_completo.txt',
+  activeTab: 'ext',
+  searchResults: [],
+  currentFileItems: [],
+  sourceMode: 'none',
+  sourceName: '',
+  treeCache: new Map(),
+  treeExpanded: new Set(),
+  treeRows: [],
+  treeStarted: false,
+  logCount: 0,
+  logCollapsed: false,
+  configCollapsed: false,
+  task: null,
+  taskSeq: 0,
+  worker: null,
+  workerURL: null,
+  workerRequests: new Map(),
+  workerSeq: 0,
+  zipWorker: null,
+  zipWorkerURL: null,
+  zipReject: null,
+  fileFilterTimer: null,
+  fileFilterToken: 0
+};
+
+let extVirtual;
+let fileVirtual;
+let searchVirtual;
+let treeVirtual;
+let arbVirtual;
+let giPreviewVirtual;
+
+// ============================================================
+// UTILITÁRIOS
+// ============================================================
+function $id(id) { return document.getElementById(id); }
+function esc(value) {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function natKey(value) {
+  return String(value).toLocaleLowerCase('pt-BR').replace(/(\d+)/g, function (part) {
+    return part.padStart(20, '0');
+  });
+}
+function isNaturalSort() { return $id('sort-sel').value === 'natural'; }
+function sortText(a, b) {
+  const ka = isNaturalSort() ? natKey(a) : String(a).toLocaleLowerCase('pt-BR');
+  const kb = isNaturalSort() ? natKey(b) : String(b).toLocaleLowerCase('pt-BR');
+  return ka < kb ? -1 : ka > kb ? 1 : 0;
+}
+function getExt(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return name.startsWith('.') ? name : '(sem extensão)';
+  return name.slice(dot).toLocaleLowerCase('pt-BR');
+}
+function isBinExt(name) { return BINARY_EXTS.has(getExt(name)); }
+function fnMatch(name, pattern) {
+  const re = '^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*').replace(/\?/g, '.') + '$';
+  return new RegExp(re, 'i').test(name);
+}
+function shouldIgnoreGlobal(name) {
+  return S.ignorePatterns.some(function (pattern) {
+    return pattern.includes('*') ? fnMatch(name, pattern) : name === pattern;
+  });
+}
+function shouldIgnorePath(relPath) {
+  return relPath.split('/').some(shouldIgnoreGlobal);
+}
+function maxSizeBytes() {
+  if (!$id('size-filter-cb').checked) return null;
+  const kb = Number($id('max-size-kb').value) || 500;
+  return Math.max(1, kb) * 1024;
+}
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+function abortError() {
+  try { return new DOMException('Operação cancelada', 'AbortError'); }
+  catch (_) { const e = new Error('Operação cancelada'); e.name = 'AbortError'; return e; }
+}
+function isAbort(error) { return error && error.name === 'AbortError'; }
+function cooperativeYield(preferFrame) {
+  if (window.scheduler && typeof window.scheduler.yield === 'function') {
+    return window.scheduler.yield();
+  }
+  return new Promise(function (resolve) {
+    if (preferFrame && typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve);
+    else if (typeof requestIdleCallback === 'function') requestIdleCallback(resolve, { timeout: 40 });
+    else setTimeout(resolve, 0);
+  });
+}
+function startTask(kind) {
+  if (S.task) {
+    S.task.cancelled = true;
+    if (S.task.controller) S.task.controller.abort();
+  }
+  const task = {
+    id: ++S.taskSeq,
+    kind: kind,
+    cancelled: false,
+    controller: typeof AbortController === 'function' ? new AbortController() : null
+  };
+  S.task = task;
+  const cancel = $id('cancel-task-btn');
+  if (cancel) cancel.style.display = 'inline-block';
+  const overlayCancel = $id('loading-cancel-btn');
+  if (overlayCancel) overlayCancel.style.display = 'inline-block';
+  return task;
+}
+function assertTask(task) {
+  if (!task || task.cancelled || S.task !== task ||
+      (task.controller && task.controller.signal.aborted)) throw abortError();
+}
+function finishTask(task) {
+  if (S.task === task) S.task = null;
+  const cancel = $id('cancel-task-btn');
+  if (cancel) cancel.style.display = 'none';
+  const overlayCancel = $id('loading-cancel-btn');
+  if (overlayCancel) overlayCancel.style.display = 'none';
+}
+function cancelCurrentTask() {
+  if (!S.task) return;
+  S.task.cancelled = true;
+  if (S.task.controller && !S.task.controller.signal.aborted) S.task.controller.abort();
+  if (S.zipWorker) {
+    S.zipWorker.terminate();
+    S.zipWorker = null;
+    if (S.zipWorkerURL) URL.revokeObjectURL(S.zipWorkerURL);
+    S.zipWorkerURL = null;
+    if (S.zipReject) S.zipReject(abortError());
+    S.zipReject = null;
+  }
+  setStatus('Cancelando…');
+  log('Cancelamento solicitado pelo usuário.', 'warn');
+}
+
+// ============================================================
+// WEB WORKER / RPC
+// ============================================================
+function initWorker() {
+  if (S.worker) return;
+  if (typeof Worker === 'undefined') throw new Error('Este navegador não oferece Web Workers.');
+  const source = '(' + workerMain.toString() + ')();';
+  const blob = new Blob([source], { type: 'text/javascript' });
+  S.workerURL = URL.createObjectURL(blob);
+  S.worker = new Worker(S.workerURL);
+
+  S.worker.onmessage = function (event) {
+    const msg = event.data || {};
+    if (!msg.requestId) return;
+    const pending = S.workerRequests.get(msg.requestId);
+    if (!pending) return;
+    S.workerRequests.delete(msg.requestId);
+    if (msg.ok) pending.resolve(msg.result);
+    else pending.reject(new Error(msg.error || 'Erro no Web Worker.'));
+  };
+
+  S.worker.onerror = function (event) {
+    const error = new Error(event.message || 'Falha no Web Worker.');
+    for (const pending of S.workerRequests.values()) pending.reject(error);
+    S.workerRequests.clear();
+    log('[ERRO] Web Worker: ' + error.message, 'err');
+  };
+}
+function workerCall(type, payload) {
+  initWorker();
+  const requestId = ++S.workerSeq;
+  return new Promise(function (resolve, reject) {
+    S.workerRequests.set(requestId, { resolve: resolve, reject: reject });
+    S.worker.postMessage(Object.assign({}, payload || {}, { type: type, requestId: requestId }));
+  });
+}
+function workerPost(type, payload) {
+  initWorker();
+  S.worker.postMessage(Object.assign({}, payload || {}, { type: type }));
+}
+async function resetWorker() {
+  await workerCall('reset');
+}
+
+function zipSafetyLimits() {
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+    (navigator.deviceMemory && navigator.deviceMemory <= 4);
+  return {
+    maxEntries: ZIP_MAX_ENTRIES,
+    maxFileBytes: ZIP_MAX_FILE_BYTES,
+    maxTotalBytes: mobile ? 256 * 1024 * 1024 : 768 * 1024 * 1024,
+    maxInputBytes: mobile ? ZIP_MAX_INPUT_MOBILE : ZIP_MAX_INPUT_DESKTOP,
+    maxRatio: ZIP_MAX_RATIO
+  };
+}
+
+function extractZipInWorker(zipFile, task) {
+  return new Promise(function (resolve, reject) {
+    const sourceElement = $id('fflate-source');
+    if (!sourceElement || !sourceElement.textContent.trim()) {
+      reject(new Error('A biblioteca interna de ZIP não foi encontrada.'));
+      return;
+    }
+
+    const workerSource = sourceElement.textContent + '\n(' + zipWorkerMain.toString() + ')();';
+    const workerBlob = new Blob([workerSource], { type: 'text/javascript' });
+    const workerURL = URL.createObjectURL(workerBlob);
+    const worker = new Worker(workerURL);
+    S.zipWorker = worker;
+    S.zipWorkerURL = workerURL;
+    S.zipReject = reject;
+    let settled = false;
+
+    function cleanup() {
+      if (S.zipWorker === worker) S.zipWorker = null;
+      if (S.zipWorkerURL === workerURL) S.zipWorkerURL = null;
+      if (S.zipReject === reject) S.zipReject = null;
+      worker.terminate();
+      URL.revokeObjectURL(workerURL);
+      if (task.controller) task.controller.signal.removeEventListener('abort', onAbort);
+    }
+
+    function fail(error) {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(error);
+    }
+
+    function onAbort() { fail(abortError()); }
+    if (task.controller) task.controller.signal.addEventListener('abort', onAbort, { once: true });
+
+    worker.onerror = function (event) {
+      fail(new Error(event.message || 'Falha no Worker de ZIP.'));
+    };
+
+    worker.onmessage = function (event) {
+      const msg = event.data || {};
+      if (settled) return;
+      if (msg.type === 'progress') {
+        if (msg.phase === 'reading') {
+          setProgress('pulse', 100, 'Lendo o arquivo ZIP…');
+          $id('loading-text').textContent = 'Lendo ' + fmtSize(zipFile.size) + ' em segundo plano…';
+        } else {
+          const entries = Number(msg.entries) || 0;
+          setProgress('pulse', 100, entries ?
+            'Descompactando: ' + entries.toLocaleString('pt-BR') + ' entradas…' : 'Descompactando ZIP…');
+          if (entries) {
+            $id('loading-text').textContent = entries.toLocaleString('pt-BR') +
+              ' entradas verificadas; ' + fmtSize(Number(msg.uncompressed) || 0) + ' selecionados…';
+          }
+        }
+        return;
+      }
+      if (msg.type === 'batch') {
+        const batch = (msg.entries || []).map(function (entry) {
+          const sourceRef = entry.data ? new Blob([entry.data], { type: 'application/octet-stream' }) : null;
+          return makeMeta(entry.name, entry.relPath, entry.size, 'zip', sourceRef);
+        });
+        acceptMetaBatch(batch);
+        return;
+      }
+      if (msg.type === 'error') {
+        fail(new Error(msg.message || 'Não foi possível descompactar o ZIP.'));
+        return;
+      }
+      if (msg.type === 'done') {
+        settled = true;
+        cleanup();
+        resolve(msg);
+      }
+    };
+
+    const limits = zipSafetyLimits();
+    worker.postMessage({
+      type: 'extract',
+      file: zipFile,
+      options: {
+        ignorePatterns: S.ignorePatterns.slice(),
+        userMaxBytes: maxSizeBytes(),
+        maxEntries: limits.maxEntries,
+        maxFileBytes: limits.maxFileBytes,
+        maxTotalBytes: limits.maxTotalBytes,
+        maxRatio: limits.maxRatio
+      }
+    });
+  });
+}
+
+// ============================================================
+// LISTA VIRTUAL — mantém somente as linhas visíveis no DOM
+// ============================================================
+class VirtualList {
+  constructor(container, rowHeight, renderer, emptyText) {
+    this.container = container;
+    this.rowHeight = rowHeight;
+    this.renderer = renderer;
+    this.emptyText = emptyText || 'Nenhum item.';
+    this.items = [];
+    this.overscan = 8;
+    this.frame = 0;
+    this.spacer = null;
+    this.container.addEventListener('scroll', () => this.schedule());
+  }
+
+  setItems(items, emptyText) {
+    this.items = items || [];
+    if (emptyText) this.emptyText = emptyText;
+    this.container.scrollTop = 0;
+    this.mount();
+    this.render();
+  }
+
+  mount() {
+    this.container.replaceChildren();
+    if (!this.items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'cl-empty';
+      empty.textContent = this.emptyText;
+      this.container.appendChild(empty);
+      this.spacer = null;
+      return;
+    }
+    this.spacer = document.createElement('div');
+    this.spacer.className = 'virtual-spacer';
+    this.spacer.style.height = (this.items.length * this.rowHeight) + 'px';
+    this.container.appendChild(this.spacer);
+  }
+
+  schedule() {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      this.render();
+    });
+  }
+
+  refresh() { this.render(); }
+
+  render() {
+    if (!this.spacer || !this.items.length) return;
+    const height = this.container.clientHeight || 300;
+    const first = Math.max(0, Math.floor(this.container.scrollTop / this.rowHeight) - this.overscan);
+    const count = Math.ceil(height / this.rowHeight) + this.overscan * 2;
+    const last = Math.min(this.items.length, first + count);
+    const fragment = document.createDocumentFragment();
+
+    for (let index = first; index < last; index++) {
+      const row = this.renderer(this.items[index], index);
+      row.classList.add('virtual-row');
+      row.style.top = (index * this.rowHeight) + 'px';
+      row.style.height = this.rowHeight + 'px';
+      fragment.appendChild(row);
+    }
+    this.spacer.replaceChildren(fragment);
+  }
+}
+
+// ============================================================
+// LOG, STATUS, TOAST E TEMA
+// ============================================================
+function log(message, type) {
+  S.logCount++;
+  $id('log-badge').textContent = S.logCount > 99 ? '99+' : S.logCount;
+  if (S.logCollapsed) return;
+  const line = document.createElement('div');
+  line.className = 'log-line' + (type ? ' ' + type : '');
+  line.textContent = '[' + new Date().toLocaleTimeString('pt-BR') + '] ' + message;
+  $id('log-body').appendChild(line);
+  $id('log-body').scrollTop = $id('log-body').scrollHeight;
+}
+function clearLog() {
+  $id('log-body').innerHTML = '';
+  S.logCount = 0;
+  $id('log-badge').textContent = '0';
+}
+function toggleLog() {
+  S.logCollapsed = !S.logCollapsed;
+  $id('log-body').classList.toggle('collapsed', S.logCollapsed);
+  $id('log-toggle-btn').textContent = S.logCollapsed ? '▼ expandir' : '▲ recolher';
+}
+function expandLog() {
+  $id('log-body').classList.toggle('expanded');
+  $id('log-expand-btn').textContent = $id('log-body').classList.contains('expanded') ? '⛶ reduzir' : '⛶ expandir';
+}
+function setStatus(left, right) {
+  $id('st-left').textContent = left;
+  $id('header-status').textContent = left;
+  if (right) $id('st-right').textContent = right;
+}
+function toast(message, type, ms) {
+  const item = document.createElement('div');
+  item.className = 'toast ' + (type || 'ok');
+  item.textContent = message;
+  $id('toast-wrap').appendChild(item);
+  setTimeout(function () { item.remove(); }, ms || 2800);
+}
+function applyTheme(theme) {
+  document.body.classList.toggle('dark-mode', theme === 'dark');
+  $id('theme-toggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+function toggleTheme() {
+  const theme = document.body.classList.contains('dark-mode') ? 'light' : 'dark';
+  applyTheme(theme);
+  try { localStorage.setItem('theme', theme); } catch (_) { /* sem persistência */ }
+  log('Tema alterado para ' + theme + '.', 'info');
+}
+function toggleConfig() {
+  S.configCollapsed = !S.configCollapsed;
+  $id('config-body').classList.toggle('collapsed', S.configCollapsed);
+  $id('config-toggle').textContent = S.configCollapsed ? '▶ expandir' : '▼ recolher';
+}
+function showLoading(text) {
+  $id('loading-overlay').classList.add('show');
+  $id('loading-text').textContent = text || 'Carregando…';
+  $id('btn-start').disabled = true;
+}
+function hideLoading() {
+  $id('loading-overlay').classList.remove('show');
+  $id('btn-start').disabled = false;
+}
+function setProgress(value, maximum, label) {
+  const wrap = $id('progress-wrap');
+  if (value === null) {
+    wrap.style.display = 'none';
+    wrap.classList.remove('pulse');
+    return;
+  }
+  wrap.style.display = 'block';
+  if (value === 'pulse') {
+    wrap.classList.add('pulse');
+    $id('prog-label').textContent = label || 'Processando…';
+    $id('prog-pct').textContent = '';
+    return;
+  }
+  wrap.classList.remove('pulse');
+  const max = Math.max(1, maximum || 1);
+  const pct = Math.round((value / max) * 100);
+  $id('progress-fill').style.width = pct + '%';
+  $id('prog-pct').textContent = pct + '%';
+  $id('prog-label').textContent = label || (value + ' / ' + max);
+}
+
+// ============================================================
+// NAVEGAÇÃO POR ABAS
+// ============================================================
+function switchTab(id) {
+  S.activeTab = id;
+  const ids = ['ext', 'files', 'search', 'explorer', 'arb', 'gi'];
+  document.querySelectorAll('.tab-btn').forEach(function (button, index) {
+    button.classList.toggle('active', ids[index] === id);
+  });
+  document.querySelectorAll('.tab-pane').forEach(function (pane) {
+    pane.classList.remove('active');
+  });
+  $id('tab-' + id).classList.add('active');
+  if (id === 'explorer') initTreeExplorer();
+}
+
+// ============================================================
+// METADADOS E SELEÇÃO
+// ============================================================
+function resetDatasetState() {
+  S.allMeta = [];
+  S.metaByPath.clear();
+  S.extStats = [];
+  S.allExts = [];
+  S.selectedFiles.clear();
+  S.selectedExts.clear();
+  S.selectedLines = 0;
+  S.selectedBytes = 0;
+  S.dirSelectedCounts.clear();
+  S.searchResults = [];
+  S.currentFileItems = [];
+  S.giFileRules = [];
+  S.giManualRules = [];
+  S.giSelIdx = -1;
+  S.applyGI = false;
+  S.treeCache.clear();
+  S.treeExpanded.clear();
+  S.treeRows = [];
+  S.treeStarted = false;
+  S.filtersDirty = false;
+  $id('gi-cb').checked = false;
+  $id('gi-cb').disabled = true;
+}
+function makeMeta(name, relPath, size, sourceType, sourceRef) {
+  const ext = getExt(name);
+  return {
+    name: name,
+    relPath: relPath.replace(/\\/g, '/'),
+    ext: ext,
+    size: Number(size) || 0,
+    isBinary: BINARY_EXTS.has(ext),
+    lines: BINARY_EXTS.has(ext) ? 0 : Math.max(1, Math.round((Number(size) || 0) / 45)),
+    sourceType: sourceType,
+    sourceRef: sourceRef
+  };
+}
+function acceptMetaBatch(batch) {
+  const dto = [];
+  for (const meta of batch) {
+    if (S.metaByPath.has(meta.relPath)) continue;
+    S.metaByPath.set(meta.relPath, meta);
+    S.allMeta.push(meta);
+    dto.push({
+      name: meta.name,
+      relPath: meta.relPath,
+      ext: meta.ext,
+      size: meta.size,
+      isBinary: meta.isBinary,
+      lines: meta.lines
+    });
+  }
+  if (dto.length) workerPost('addBatch', { records: dto });
+}
+function directoryAncestors(relPath) {
+  const parts = relPath.split('/');
+  const dirs = [''];
+  for (let i = 1; i < parts.length; i++) dirs.push(parts.slice(0, i).join('/'));
+  return dirs;
+}
+function setFileSelected(relPath, selected, updateNow) {
+  const meta = S.metaByPath.get(relPath);
+  if (!meta) return false;
+  const already = S.selectedFiles.has(relPath);
+  if (already === selected) return false;
+
+  const delta = selected ? 1 : -1;
+  if (selected) S.selectedFiles.add(relPath);
+  else S.selectedFiles.delete(relPath);
+  S.selectedLines += delta * meta.lines;
+  S.selectedBytes += delta * meta.size;
+
+  for (const dir of directoryAncestors(relPath)) {
+    const next = (S.dirSelectedCounts.get(dir) || 0) + delta;
+    if (next) S.dirSelectedCounts.set(dir, next);
+    else S.dirSelectedCounts.delete(dir);
+  }
+  if (updateNow !== false) updateCounter();
+  return true;
+}
+async function applySelection(paths, selected) {
+  let changed = 0;
+  for (let i = 0; i < paths.length; i++) {
+    if (setFileSelected(paths[i], selected, false)) changed++;
+    if (i && i % 800 === 0) await cooperativeYield(true);
+  }
+  updateCounter();
+  refreshSelectionVisuals();
+  return changed;
+}
+function refreshSelectionVisuals() {
+  if (fileVirtual) fileVirtual.refresh();
+  if (searchVirtual) searchVirtual.refresh();
+  if (treeVirtual) treeVirtual.refresh();
+}
+function updateCounter() {
+  const count = S.selectedFiles.size;
+  const tokens = Math.round(S.selectedBytes / 4);
+  $id('counter-text').textContent = count.toLocaleString('pt-BR') +
+    ' arquivo(s) selecionado(s) | ~' + Math.max(0, S.selectedLines).toLocaleString('pt-BR') + ' linhas';
+  $id('token-estimate').textContent = '~' + Math.max(0, tokens).toLocaleString('pt-BR') + ' tokens est.';
+  $id('file-count-badge').textContent = S.allMeta.length.toLocaleString('pt-BR') + ' arq.';
+  $id('st-right').textContent = count.toLocaleString('pt-BR') + ' sel. | ' +
+    S.allMeta.length.toLocaleString('pt-BR') + ' total';
+}
+function saveIgnorePatterns() {
+  try { localStorage.setItem(IGNORE_STORAGE_KEY, JSON.stringify(S.ignorePatterns)); }
+  catch (_) { /* armazenamento indisponível */ }
+}
+function updateIgnoreSummary() {
+  const element = $id('ignore-summary');
+  if (element) element.textContent = S.ignorePatterns.length + '/' + ALL_IGNORE_PATTERNS.length + ' padrões ativos';
+}
+function openIgnoreModal() {
+  renderIgnoreModal();
+  $id('ignore-modal').classList.add('show');
+}
+function closeIgnoreModal() { $id('ignore-modal').classList.remove('show'); }
+function renderIgnoreModal() {
+  const active = new Set(S.ignorePatterns);
+  const body = $id('ignore-body');
+  body.innerHTML = '';
+
+  PATTERN_GROUPS.forEach(function (groupInfo) {
+    const section = document.createElement('section');
+    const patterns = groupInfo.patterns.map(function (item) { return item[0]; });
+    const allActive = patterns.every(function (pattern) { return active.has(pattern); });
+    section.innerHTML = '<div class="ignore-group-title"><strong>' + esc(groupInfo.label) +
+      '</strong><button class="btn-sm">' + (allActive ? 'desmarcar grupo' : 'marcar grupo') +
+      '</button></div><div class="ignore-items"></div>';
+    section.querySelector('button').addEventListener('click', function () {
+      patterns.forEach(function (pattern) {
+        if (allActive) active.delete(pattern); else active.add(pattern);
+      });
+      setIgnorePatterns(Array.from(active));
+      renderIgnoreModal();
+    });
+
+    const items = section.querySelector('.ignore-items');
+    groupInfo.patterns.forEach(function (itemInfo) {
+      const pattern = itemInfo[0];
+      const description = itemInfo[1];
+      const enabled = active.has(pattern);
+      const label = document.createElement('label');
+      label.className = 'ignore-item' + (enabled ? ' on' : '');
+      label.innerHTML = '<input type="checkbox" ' + (enabled ? 'checked' : '') +
+        '><code>' + esc(pattern) + '</code><span>' + esc(description) + '</span>';
+      label.querySelector('input').addEventListener('change', function (event) {
+        if (event.target.checked) active.add(pattern); else active.delete(pattern);
+        setIgnorePatterns(Array.from(active));
+        renderIgnoreModal();
+      });
+      items.appendChild(label);
+    });
+    body.appendChild(section);
+  });
+  $id('ignore-count').textContent = S.ignorePatterns.length + '/' + ALL_IGNORE_PATTERNS.length + ' ativos';
+}
+function setIgnorePatterns(patterns) {
+  S.ignorePatterns = ALL_IGNORE_PATTERNS.filter(function (pattern) { return patterns.includes(pattern); });
+  saveIgnorePatterns();
+  updateIgnoreSummary();
+  if (S.allMeta.length) {
+    S.filtersDirty = true;
+    const selectedIgnored = Array.from(S.selectedFiles).filter(shouldIgnorePath);
+    if (selectedIgnored.length) applySelection(selectedIgnored, false);
+    toast('Os novos padrões valem na próxima abertura da pasta ou do ZIP.', 'warn', 4500);
+  }
+}
+function setAllIgnorePatterns(enabled) {
+  setIgnorePatterns(enabled ? ALL_IGNORE_PATTERNS.slice() : []);
+  renderIgnoreModal();
+}
+
+// ============================================================
+// SELEÇÃO DE DIRETÓRIO, ZIP E VARREDURA
+// ============================================================
+async function pickSourceDir() {
+  if (typeof window.showDirectoryPicker !== 'function') {
+    pickSourceDirLegacy();
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    await scanDirectoryHandle(handle);
+  } catch (error) {
+    if (isAbort(error)) return;
+    log('[AVISO] Seletor moderno indisponível: ' + error.message, 'warn');
+    toast('Não foi possível usar o modo rápido. Abrindo o modo compatível.', 'warn', 4200);
+    pickSourceDirLegacy();
+  }
+}
+function pickSourceDirLegacy() { $id('src-picker').click(); }
+function pickZip() { $id('zip-picker').click(); }
+
+async function prepareDataset(sourceName, mode) {
+  resetDatasetState();
+  await resetWorker();
+  S.sourceMode = mode;
+  S.sourceName = sourceName;
+  $id('src-input').value = sourceName;
+  const labels = { fsa: 'modo rápido', legacy: 'modo compat.', zip: 'modo ZIP' };
+  const classes = { fsa: 'mode-fast', legacy: 'mode-compat', zip: 'mode-zip' };
+  $id('scan-mode-badge').textContent = labels[mode] || mode;
+  $id('scan-mode-badge').className = classes[mode] || '';
+  renderEmptyDataViews(mode === 'zip' ? 'Descompactando ZIP…' : 'Varrendo arquivos…');
+}
+
+async function scanZipFile(zipFile) {
+  if (!zipFile) return;
+  const limits = zipSafetyLimits();
+  if (zipFile.size > limits.maxInputBytes) {
+    toast('O ZIP ultrapassa o limite seguro de ' + Math.round(limits.maxInputBytes / 1024 / 1024) + ' MB.', 'err', 5000);
+    return;
+  }
+
+  const task = startTask('scan-zip');
+  const initialName = zipFile.name.replace(/\.zip$/i, '') || 'zip';
+  showLoading('Preparando o ZIP…');
+  setProgress('pulse', 100, 'Abrindo ZIP em segundo plano…');
+  log('⟳ Importação de ZIP iniciada: ' + zipFile.name + ' (' + fmtSize(zipFile.size) + ').', 'info');
+
+  try {
+    await prepareDataset(initialName, 'zip');
+    assertTask(task);
+    const result = await extractZipInWorker(zipFile, task);
+    assertTask(task);
+    S.sourceName = result.sourceName || initialName;
+    $id('src-input').value = S.sourceName;
+    const warnings = result.warnings || {};
+    const skipped = (warnings.unsafe || 0) + (warnings.ignored || 0) +
+      (warnings.size || 0) + (warnings.duplicate || 0);
+    await finalizeDataset(task, skipped);
+    log('✓ ZIP importado: ' + result.included.toLocaleString('pt-BR') +
+      ' arquivo(s); ' + (warnings.binary || 0).toLocaleString('pt-BR') + ' binário(s) sem descompressão.', 'ok');
+    if (warnings.unsafe || warnings.duplicate) {
+      toast('Algumas entradas inseguras ou duplicadas foram ignoradas.', 'warn', 5000);
+    }
+  } catch (error) {
+    if (isAbort(error)) {
+      log('Importação do ZIP cancelada.', 'warn');
+      toast('Importação cancelada.', 'warn');
+      setStatus('Cancelado');
+    } else {
+      log('[ERRO ZIP] ' + error.message, 'err');
+      toast('Não foi possível abrir o ZIP: ' + error.message, 'err', 6500);
+      setStatus('Erro no ZIP');
+    }
+  } finally {
+    hideLoading();
+    setProgress(null);
+    finishTask(task);
+  }
+}
+
+async function scanDirectoryHandle(rootHandle) {
+  const task = startTask('scan-fsa');
+  showLoading('Abrindo diretório no modo rápido…');
+  setProgress('pulse', 100, 'Varrendo com poda de diretórios…');
+  log('⟳ Varredura rápida iniciada com File System Access API.', 'info');
+
+  try {
+    await prepareDataset(rootHandle.name, 'fsa');
+    assertTask(task);
+
+    const sizeLimit = maxSizeBytes();
+    const active = new Set();
+    let pendingBatch = [];
+    let visited = 0;
+    let skipped = 0;
+    let included = 0;
+
+    function flushBatch() {
+      if (!pendingBatch.length) return;
+      const batch = pendingBatch;
+      pendingBatch = [];
+      acceptMetaBatch(batch);
+    }
+
+    async function processFile(fileHandle, relPath) {
+      try {
+        assertTask(task);
+        const file = await fileHandle.getFile();
+        assertTask(task);
+        if (sizeLimit && file.size > sizeLimit) {
+          skipped++;
+          return;
+        }
+        pendingBatch.push(makeMeta(file.name, relPath, file.size, 'fsa', fileHandle));
+        included++;
+        if (pendingBatch.length >= META_BATCH_SIZE) flushBatch();
+      } catch (error) {
+        if (isAbort(error)) throw error;
+        skipped++;
+      }
+    }
+
+    async function scheduleFile(fileHandle, relPath) {
+      while (active.size >= OUTPUT_CONCURRENCY) {
+        assertTask(task);
+        await Promise.race(active);
+      }
+      let promise;
+      promise = processFile(fileHandle, relPath).finally(function () { active.delete(promise); });
+      active.add(promise);
+    }
+
+    async function walk(dirHandle, relDir) {
+      for await (const entry of dirHandle.values()) {
+        assertTask(task);
+        visited++;
+        const relPath = relDir ? relDir + '/' + entry.name : entry.name;
+        if (entry.kind === 'directory') {
+          if (shouldIgnoreGlobal(entry.name)) {
+            skipped++;
+            continue; // poda real: não entra na pasta ignorada
+          }
+          await walk(entry, relPath);
+        } else if (entry.kind === 'file') {
+          if (shouldIgnoreGlobal(entry.name)) {
+            skipped++;
+            continue;
+          }
+          await scheduleFile(entry, relPath);
+        }
+        if (visited % 120 === 0) {
+          $id('loading-text').textContent = included.toLocaleString('pt-BR') +
+            ' arquivos incluídos; ' + skipped.toLocaleString('pt-BR') + ' ignorados…';
+          setProgress('pulse', 100, 'Varrendo: ' + visited.toLocaleString('pt-BR') + ' entradas…');
+          await cooperativeYield(true);
+        }
+      }
+    }
+
+    await walk(rootHandle, rootHandle.name);
+    await Promise.all(Array.from(active));
+    flushBatch();
+    assertTask(task);
+    await finalizeDataset(task, skipped);
+  } catch (error) {
+    if (isAbort(error)) {
+      log('Varredura cancelada.', 'warn');
+      toast('Varredura cancelada.', 'warn');
+      setStatus('Cancelado');
+    } else {
+      log('[ERRO] Varredura rápida: ' + error.message, 'err');
+      toast('Erro ao ler o diretório.', 'err');
+      setStatus('Erro na varredura');
+    }
+  } finally {
+    hideLoading();
+    setProgress(null);
+    finishTask(task);
+  }
+}
+
+async function scanLegacyFileList(fileList) {
+  if (!fileList || !fileList.length) return;
+  const first = fileList.item(0);
+  const firstPath = first.webkitRelativePath || first.name;
+  const sourceName = firstPath.split('/')[0] || 'Entrada';
+  const task = startTask('scan-legacy');
+  showLoading('O navegador já enumerou os arquivos. Processando…');
+  setProgress(0, fileList.length, 'Processando metadados…');
+  log('⟳ Modo compatível: processando ' + fileList.length.toLocaleString('pt-BR') + ' itens.', 'info');
+
+  try {
+    await prepareDataset(sourceName, 'legacy');
+    assertTask(task);
+    const sizeLimit = maxSizeBytes();
+    let skipped = 0;
+
+    for (let start = 0; start < fileList.length; start += META_BATCH_SIZE) {
+      assertTask(task);
+      const batch = [];
+      const end = Math.min(fileList.length, start + META_BATCH_SIZE);
+      for (let index = start; index < end; index++) {
+        const file = fileList.item(index);
+        const relPath = (file.webkitRelativePath || file.name).replace(/\\/g, '/');
+        if (shouldIgnorePath(relPath) || (sizeLimit && file.size > sizeLimit)) {
+          skipped++;
+          continue;
+        }
+        batch.push(makeMeta(file.name, relPath, file.size, 'legacy', file));
+      }
+      acceptMetaBatch(batch);
+      setProgress(end, fileList.length, 'Metadados: ' + end.toLocaleString('pt-BR') +
+        '/' + fileList.length.toLocaleString('pt-BR'));
+      $id('loading-text').textContent = S.allMeta.length.toLocaleString('pt-BR') + ' arquivos incluídos…';
+      await cooperativeYield(true);
+    }
+
+    assertTask(task);
+    await finalizeDataset(task, skipped);
+  } catch (error) {
+    if (isAbort(error)) {
+      log('Processamento cancelado.', 'warn');
+      toast('Processamento cancelado.', 'warn');
+      setStatus('Cancelado');
+    } else {
+      log('[ERRO] Modo compatível: ' + error.message, 'err');
+      toast('Erro ao processar os arquivos.', 'err');
+    }
+  } finally {
+    $id('src-picker').value = '';
+    hideLoading();
+    setProgress(null);
+    finishTask(task);
+  }
+}
+
+async function finalizeDataset(task, skipped) {
+  assertTask(task);
+  setProgress('pulse', 100, 'Indexando em segundo plano…');
+  $id('loading-text').textContent = 'Ordenando e preparando índices…';
+  const result = await workerCall('finalize', { sortMode: isNaturalSort() ? 'natural' : 'alpha' });
+  assertTask(task);
+
+  S.allMeta = result.paths.map(function (path) { return S.metaByPath.get(path); }).filter(Boolean);
+  S.extStats = result.extensions;
+  S.allExts = result.extensions.map(function (item) { return item.ext; });
+  await loadGitignore();
+  assertTask(task);
+
+  renderExtList();
+  await renderFileListNow();
+  renderSearchList();
+  renderArbList();
+  renderGIRules();
+  updateCounter();
+  setStatus('✓ ' + S.allMeta.length.toLocaleString('pt-BR') + ' arquivo(s) prontos');
+  log('✓ ' + S.allMeta.length.toLocaleString('pt-BR') + ' arquivo(s), ' +
+    S.allExts.length.toLocaleString('pt-BR') + ' extensão(ões), ' +
+    skipped.toLocaleString('pt-BR') + ' ignorado(s).', 'ok');
+  toast('✓ Varredura concluída sem bloquear a interface.', 'ok');
+}
+
+async function readMetaText(meta) {
+  if (meta.sourceType === 'fsa') {
+    const file = await meta.sourceRef.getFile();
+    return file.text();
+  }
+  if (!meta.sourceRef) throw new Error('Conteúdo indisponível para este arquivo.');
+  return meta.sourceRef.text();
+}
+
+async function loadGitignore() {
+  const meta = S.allMeta.find(function (item) { return item.name === '.gitignore'; });
+  if (!meta) {
+    S.giFileRules = [];
+    $id('gi-status').textContent = '⚠ Nenhum .gitignore encontrado.';
+    $id('gi-cb').disabled = true;
+    return;
+  }
+  try {
+    const text = await readMetaText(meta);
+    S.giFileRules = text.split(/\r?\n/).map(function (line) { return line.trimEnd(); });
+    $id('gi-status').textContent = '✅ .gitignore: ' + S.giFileRules.length + ' linha(s).';
+    $id('gi-cb').disabled = false;
+  } catch (error) {
+    S.giFileRules = [];
+    $id('gi-status').textContent = '⚠ Não foi possível ler o .gitignore.';
+    $id('gi-cb').disabled = true;
+  }
+}
+
+// ============================================================
+// EXTENSÕES — lista virtual
+// ============================================================
+function renderExtRow(info) {
+  const selected = S.selectedExts.has(info.ext);
+  const row = document.createElement('div');
+  row.className = 'cl-item ext-row' + (selected ? ' checked' : '');
+  row.innerHTML = '<input type="checkbox"' + (selected ? ' checked' : '') +
+    '><span class="cl-item-text ext-name">' + esc(info.ext) +
+    (info.binary ? ' <small>(binário)</small>' : '') +
+    '</span><span class="cl-item-sub ext-size">' + fmtSize(info.size) +
+    '</span><span class="cl-item-sub ext-count">' + info.count.toLocaleString('pt-BR') + '</span>';
+  const checkbox = row.querySelector('input');
+  checkbox.addEventListener('change', function () {
+    if (checkbox.checked) S.selectedExts.add(info.ext);
+    else S.selectedExts.delete(info.ext);
+    renderExtList();
+  });
+  return row;
+}
+function sortExtBy(column) {
+  if (S.extSort.col === column) S.extSort.dir = S.extSort.dir === 'asc' ? 'desc' : 'asc';
+  else { S.extSort.col = column; S.extSort.dir = 'asc'; }
+  renderExtList();
+}
+function renderExtList() {
+  const query = $id('ext-search').value.toLocaleLowerCase('pt-BR');
+  let items = (query ? S.extStats.filter(function (info) {
+    return info.ext.toLocaleLowerCase('pt-BR').includes(query);
+  }) : S.extStats).slice();
+
+  if (S.extSort.col) {
+    items.sort(function (a, b) {
+      let result = 0;
+      if (S.extSort.col === 'ext') result = sortText(a.ext, b.ext);
+      else if (S.extSort.col === 'size') result = a.size - b.size;
+      else if (S.extSort.col === 'count') result = a.count - b.count;
+      return S.extSort.dir === 'asc' ? result : -result;
+    });
+  }
+
+  const header = $id('ext-header');
+  if (header) {
+    header.querySelectorAll('.ext-h-col').forEach(function (element) {
+      element.classList.remove('sort-asc', 'sort-desc');
+      if (element.dataset.col === S.extSort.col) element.classList.add('sort-' + S.extSort.dir);
+    });
+  }
+  extVirtual.setItems(items, S.allMeta.length ? 'Nenhuma extensão encontrada.' : 'Selecione uma pasta de entrada.');
+  $id('ext-counter').textContent = S.selectedExts.size.toLocaleString('pt-BR') + ' sel.';
+}
+function selAllExt() {
+  S.allExts.forEach(function (ext) { S.selectedExts.add(ext); });
+  renderExtList();
+}
+function deselAllExt() { S.selectedExts.clear(); renderExtList(); }
+
+// ============================================================
+// ARQUIVOS — busca no Worker e lista virtual
+// ============================================================
+function renderFileRow(meta) {
+  const selected = S.selectedFiles.has(meta.relPath);
+  const parts = meta.relPath.split('/');
+  const directory = parts.slice(0, -1).join('/');
+  const row = document.createElement('div');
+  row.className = 'cl-item' + (selected ? ' checked' : '');
+  row.innerHTML = '<input type="checkbox"' + (selected ? ' checked' : '') +
+    '><div class="file-row-main"><div class="cl-item-text">' + esc(meta.name) +
+    (meta.isBinary ? ' <small>(binário)</small>' : '') + '</div><div class="cl-item-sub">' +
+    esc(directory) + '</div></div><span class="cl-item-sub file-size">' + fmtSize(meta.size) + '</span>';
+  const checkbox = row.querySelector('input');
+  checkbox.addEventListener('change', function () {
+    setFileSelected(meta.relPath, checkbox.checked);
+    fileVirtual.refresh();
+    if (treeVirtual) treeVirtual.refresh();
+  });
+  return row;
+}
+function renderFileList() {
+  clearTimeout(S.fileFilterTimer);
+  S.fileFilterTimer = setTimeout(function () { renderFileListNow(); }, 100);
+}
+async function renderFileListNow() {
+  const token = ++S.fileFilterToken;
+  const query = $id('file-search').value.trim();
+  let items;
+  if (!query) {
+    items = S.allMeta;
+  } else {
+    try {
+      const paths = await workerCall('contains', { query: query });
+      if (token !== S.fileFilterToken) return;
+      items = paths.map(function (path) { return S.metaByPath.get(path); }).filter(Boolean);
+    } catch (error) {
+      log('[ERRO] Filtro de arquivos: ' + error.message, 'err');
+      return;
+    }
+  }
+  if (token !== S.fileFilterToken) return;
+  S.currentFileItems = items;
+  fileVirtual.setItems(items, S.allMeta.length ? 'Nenhum arquivo encontrado.' : 'Selecione uma pasta de entrada.');
+  $id('file-counter').textContent = items.length.toLocaleString('pt-BR') + ' vis. / ' +
+    S.selectedFiles.size.toLocaleString('pt-BR') + ' sel.';
+}
+async function selAllFiles() { await applySelection(S.allMeta.map(function (m) { return m.relPath; }), true); }
+async function deselAllFiles() { await applySelection(S.allMeta.map(function (m) { return m.relPath; }), false); }
+
+// ============================================================
+// BUSCA POR NOME — executada no Worker
+// ============================================================
+function renderSearchRow(meta) {
+  const selected = S.selectedFiles.has(meta.relPath);
+  const row = document.createElement('div');
+  row.className = 'cl-item' + (selected ? ' checked' : '');
+  row.innerHTML = '<input type="checkbox"' + (selected ? ' checked' : '') +
+    '><span class="cl-item-text">' + esc(meta.relPath) + '</span>';
+  const checkbox = row.querySelector('input');
+  checkbox.addEventListener('change', function () {
+    setFileSelected(meta.relPath, checkbox.checked);
+    searchVirtual.refresh();
+    if (fileVirtual) fileVirtual.refresh();
+  });
+  return row;
+}
+async function doSearch() {
+  const raw = $id('txt-search').value.trim();
+  try {
+    setStatus('Buscando em segundo plano…');
+    const paths = raw ? await workerCall('search', { raw: raw }) : S.allMeta.map(function (m) { return m.relPath; });
+    S.searchResults = paths;
+    renderSearchList();
+    setStatus(paths.length.toLocaleString('pt-BR') + ' resultado(s)');
+    if (!paths.length) toast('Nenhum arquivo encontrado.', 'warn');
+    else log('✓ ' + paths.length.toLocaleString('pt-BR') + ' arquivo(s) encontrado(s).', 'ok');
+  } catch (error) {
+    log('[ERRO] Busca: ' + error.message, 'err');
+  }
+}
+function renderSearchList() {
+  const items = S.searchResults.map(function (path) { return S.metaByPath.get(path); }).filter(Boolean);
+  searchVirtual.setItems(items, S.allMeta.length ? 'Nenhum resultado.' : 'Selecione uma pasta de entrada.');
+}
+async function selAllSearch() { await applySelection(S.searchResults, true); }
+async function deselAllSearch() { await applySelection(S.searchResults, false); }
+
+// ============================================================
+// EXPLORADOR — árvore paginada, expansível e virtualizada
+// ============================================================
+async function initTreeExplorer() {
+  if (S.treeStarted || !S.allMeta.length) {
+    if (!S.allMeta.length) treeVirtual.setItems([], 'Selecione uma pasta de entrada.');
+    return;
+  }
+  S.treeStarted = true;
+  treeVirtual.setItems([], 'Carregando árvore…');
+  try {
+    await loadTreePage('', true);
+    rebuildTreeRows();
+  } catch (error) {
+    S.treeStarted = false;
+    log('[ERRO] Árvore: ' + error.message, 'err');
+    treeVirtual.setItems([], 'Não foi possível montar a árvore.');
+  }
+}
+async function loadTreePage(path, reset) {
+  let cache = S.treeCache.get(path);
+  if (!cache || reset) cache = { items: [], totalItems: 0, loading: false, loadingPromise: null };
+  if (cache.loading) return cache.loadingPromise;
+  if (cache.totalItems && cache.items.length >= cache.totalItems) return;
+  cache.loading = true;
+  S.treeCache.set(path, cache);
+  cache.loadingPromise = (async function () {
+    try {
+      const result = await workerCall('treeChildren', {
+        path: path,
+        offset: cache.items.length,
+        limit: TREE_PAGE_SIZE
+      });
+      cache.items.push.apply(cache.items, result.items);
+      cache.totalItems = result.totalItems;
+    } finally {
+      cache.loading = false;
+      cache.loadingPromise = null;
+    }
+  })();
+  return cache.loadingPromise;
+}
+function rebuildTreeRows() {
+  const rows = [];
+  function append(path, depth) {
+    const cache = S.treeCache.get(path);
+    if (!cache) return;
+    for (const item of cache.items) {
+      rows.push(Object.assign({}, item, { depth: depth }));
+      if (item.type === 'dir' && S.treeExpanded.has(item.path)) append(item.path, depth + 1);
+    }
+    if (cache.items.length < cache.totalItems) {
+      rows.push({ type: 'more', parentPath: path, depth: depth, remaining: cache.totalItems - cache.items.length });
+    }
+  }
+  append('', 0);
+  S.treeRows = rows;
+  treeVirtual.setItems(rows, S.allMeta.length ? 'Pasta vazia.' : 'Selecione uma pasta de entrada.');
+}
+async function toggleTreeDirectory(path) {
+  if (S.treeExpanded.has(path)) {
+    S.treeExpanded.delete(path);
+    rebuildTreeRows();
+    return;
+  }
+  S.treeExpanded.add(path);
+  if (!S.treeCache.has(path)) {
+    rebuildTreeRows();
+    await loadTreePage(path, true);
+  }
+  rebuildTreeRows();
+}
+async function loadMoreTree(path) {
+  await loadTreePage(path, false);
+  rebuildTreeRows();
+}
+function collapseAllTree() {
+  S.treeExpanded.clear();
+  rebuildTreeRows();
+  setStatus('Árvore recolhida');
+}
+async function expandAllTree() {
+  if (!S.allMeta.length) return;
+  if (S.allMeta.length > 20000 && !confirm('A árvore tem ' +
+      S.allMeta.length.toLocaleString('pt-BR') + ' arquivos. Expandir todas as pastas pode demorar. Continuar?')) return;
+
+  await initTreeExplorer();
+  const task = startTask('expand-tree');
+  const queue = [''];
+  const discovered = new Set(['']);
+  let processed = 0;
+  setProgress('pulse', 100, 'Expandindo pastas com segurança…');
+
+  try {
+    while (queue.length) {
+      assertTask(task);
+      const path = queue.shift();
+      let cache = S.treeCache.get(path);
+      if (!cache) {
+        await loadTreePage(path, true);
+        cache = S.treeCache.get(path);
+      }
+
+      // Diretórios sempre vêm antes dos arquivos. Carrega páginas somente
+      // até descobrir todas as subpastas, sem materializar todos os arquivos.
+      while (cache && cache.items.length < cache.totalItems &&
+             !cache.items.some(function (item) { return item.type === 'file'; })) {
+        await loadTreePage(path, false);
+        cache = S.treeCache.get(path);
+      }
+
+      if (path) S.treeExpanded.add(path);
+      for (const item of (cache ? cache.items : [])) {
+        if (item.type === 'dir' && !discovered.has(item.path)) {
+          discovered.add(item.path);
+          queue.push(item.path);
+        }
+      }
+      processed++;
+      if (processed % 30 === 0) {
+        setProgress('pulse', 100, 'Expandindo: ' + processed.toLocaleString('pt-BR') + ' pastas…');
+        await cooperativeYield(true);
+      }
+    }
+    rebuildTreeRows();
+    setStatus('✓ ' + Math.max(0, discovered.size - 1).toLocaleString('pt-BR') + ' pasta(s) expandidas');
+  } catch (error) {
+    if (isAbort(error)) {
+      log('Expansão da árvore cancelada.', 'warn');
+      rebuildTreeRows();
+    } else {
+      log('[ERRO] Expansão da árvore: ' + error.message, 'err');
+    }
+  } finally {
+    setProgress(null);
+    finishTask(task);
+  }
+}
+async function toggleTreeDirectorySelection(item) {
+  const selectedCount = S.dirSelectedCounts.get(item.path) || 0;
+  const select = selectedCount < item.total;
+  setStatus('Atualizando seleção da pasta…');
+  try {
+    const paths = await workerCall('descendants', { path: item.path });
+    await applySelection(paths, select);
+    setStatus((select ? 'Pasta marcada: ' : 'Pasta desmarcada: ') + item.name);
+    log('Pasta ' + (select ? 'marcada' : 'desmarcada') + ': ' + item.path, 'info');
+  } catch (error) {
+    log('[ERRO] Seleção da pasta: ' + error.message, 'err');
+  }
+}
+function renderTreeRow(item) {
+  const row = document.createElement('div');
+  row.style.paddingLeft = (6 + item.depth * 16) + 'px';
+
+  if (item.type === 'more') {
+    row.className = 'tree-item tree-more';
+    row.innerHTML = '<span class="tree-toggle">＋</span><span class="tree-label">Carregar mais (' +
+      item.remaining.toLocaleString('pt-BR') + ')</span>';
+    row.addEventListener('click', function () { loadMoreTree(item.parentPath); });
+    return row;
+  }
+
+  if (item.type === 'dir') {
+    const expanded = S.treeExpanded.has(item.path);
+    const selectedCount = S.dirSelectedCounts.get(item.path) || 0;
+    const full = item.total > 0 && selectedCount === item.total;
+    const partial = selectedCount > 0 && selectedCount < item.total;
+    row.className = 'tree-item' + (full ? ' checked' : partial ? ' partial' : '');
+    row.innerHTML = '<span class="tree-toggle">' + (expanded ? '▼' : '▶') +
+      '</span><span class="tree-icon">' + (full ? '☑' : partial ? '⊟' : '☐') +
+      '</span><span class="tree-label dir">' + esc(item.name) +
+      '</span><span class="cl-item-sub tree-count">' + item.total.toLocaleString('pt-BR') + '</span>';
+    row.querySelector('.tree-toggle').addEventListener('click', function (event) {
+      event.stopPropagation();
+      toggleTreeDirectory(item.path);
+    });
+    row.addEventListener('click', function () { toggleTreeDirectorySelection(item); });
+    return row;
+  }
+
+  const selected = S.selectedFiles.has(item.path);
+  row.className = 'tree-item' + (selected ? ' checked' : '');
+  row.innerHTML = '<span class="tree-toggle"></span><span class="tree-icon">' +
+    (selected ? '☑' : '☐') + '</span><span class="tree-label">' + esc(item.name) +
+    (item.isBinary ? ' <small>(binário)</small>' : '') + '</span><span class="cl-item-sub tree-count">' +
+    fmtSize(item.size) + '</span>';
+  row.addEventListener('click', function () {
+    setFileSelected(item.path, !S.selectedFiles.has(item.path));
+    treeVirtual.refresh();
+    if (fileVirtual) fileVirtual.refresh();
+  });
+  return row;
+}
+
+// ============================================================
+// ARQUIVOS AVULSOS — conteúdo lido somente na geração
+// ============================================================
+function handleArbPicker(event) {
+  readArbFiles(Array.from(event.target.files || []));
+  event.target.value = '';
+}
+function handleArbDrop(event) {
+  event.preventDefault();
+  $id('arb-drop').classList.remove('drag-over');
+  readArbFiles(Array.from(event.dataTransfer.files || []));
+}
+function readArbFiles(files) {
+  let added = 0;
+  for (const file of files) {
+    if (S.arbFiles.some(function (item) { return item.name === file.name && item.size === file.size; })) continue;
+    const item = {
+      id: S.nextArbId++,
+      name: file.name,
+      size: file.size,
+      file: file,
+      isBinary: isBinExt(file.name)
+    };
+    S.arbFiles.push(item);
+    S.arbChecked.add(item.id);
+    added++;
+  }
+  renderArbList();
+  log(added + ' arquivo(s) avulso(s) adicionado(s).', 'ok');
+}
+function renderArbRow(item) {
+  const selected = S.arbChecked.has(item.id);
+  const row = document.createElement('div');
+  row.className = 'arb-item';
+  row.innerHTML = '<input type="checkbox"' + (selected ? ' checked' : '') +
+    '><span class="arb-item-name">' + esc(item.name) + (item.isBinary ? ' (binário)' : '') +
+    '</span><span class="arb-item-size">' + fmtSize(item.size) + '</span>';
+  row.querySelector('input').addEventListener('change', function (event) {
+    if (event.target.checked) S.arbChecked.add(item.id);
+    else S.arbChecked.delete(item.id);
+  });
+  return row;
+}
+function renderArbList() {
+  arbVirtual.setItems(S.arbFiles, '⬆ Arraste arquivos aqui ou use o botão abaixo');
+}
+function remCheckedArb() {
+  const before = S.arbFiles.length;
+  S.arbFiles = S.arbFiles.filter(function (item) { return !S.arbChecked.has(item.id); });
+  const removed = before - S.arbFiles.length;
+  S.arbChecked.clear();
+  S.arbFiles.forEach(function (item) { S.arbChecked.add(item.id); });
+  renderArbList();
+  log(removed + ' removido(s).', 'ok');
+}
+function clearArb() {
+  S.arbFiles = [];
+  S.arbChecked.clear();
+  renderArbList();
+  log('Lista avulsa limpa.', 'ok');
+}
+
+// ============================================================
+// GITIGNORE
+// ============================================================
+function toggleGI() {
+  S.applyGI = $id('gi-cb').checked;
+  log('Gitignore ' + (S.applyGI ? 'ativado' : 'desativado') + '.', 'info');
+}
+function renderGIRules() {
+  const container = $id('gi-rules');
+  container.innerHTML = '';
+  const all = S.giFileRules.concat(S.giManualRules.map(function (rule) { return '[manual] ' + rule; }));
+  all.forEach(function (rule, index) {
+    const item = document.createElement('div');
+    item.className = 'gi-rule' + (rule.startsWith('[manual]') ? ' manual' : '') +
+      (S.giSelIdx === index ? ' sel' : '');
+    item.textContent = rule;
+    item.addEventListener('click', function () { S.giSelIdx = index; renderGIRules(); });
+    container.appendChild(item);
+  });
+}
+function addGIRule() {
+  const value = $id('gi-input').value.trim();
+  if (!value || S.giManualRules.includes(value)) {
+    toast('Regra já existe ou está vazia.', 'warn');
+    return;
+  }
+  S.giManualRules.push(value);
+  $id('gi-input').value = '';
+  renderGIRules();
+  refreshGIPreview();
+}
+function remGIRule() {
+  if (S.giSelIdx < 0) return;
+  const fileCount = S.giFileRules.length;
+  if (S.giSelIdx < fileCount) {
+    toast('Apenas regras manuais podem ser removidas.', 'warn');
+    return;
+  }
+  S.giManualRules.splice(S.giSelIdx - fileCount, 1);
+  S.giSelIdx = -1;
+  renderGIRules();
+  refreshGIPreview();
+}
+function renderGIPreviewRow(item) {
+  const row = document.createElement('div');
+  row.className = 'prev-item ' + (item.ignored ? 'ign' : 'inc');
+  row.textContent = (item.ignored ? '🚫 ' : '✅ ') + item.path;
+  return row;
+}
+async function refreshGIPreview() {
+  if (!S.allMeta.length) {
+    toast('Carregue os arquivos primeiro.', 'warn');
+    return;
+  }
+  try {
+    const items = await workerCall('giPreview', {
+      rules: S.giFileRules.concat(S.giManualRules),
+      limit: 400
+    });
+    giPreviewVirtual.setItems(items, 'Nenhum item para visualizar.');
+    log('Preview: ' + items.length + ' item(s).', 'ok');
+  } catch (error) {
+    log('[ERRO] Preview gitignore: ' + error.message, 'err');
+  }
+}
+
+// ============================================================
+// GERAÇÃO DA SAÍDA — concorrência limitada, Blob e cancelamento
+// ============================================================
+function buildHeader(source, count, filters) {
+  let out = '='.repeat(60) + '\n  COPIADOR DE CÓDIGO v2.3 — HTML Otimizado + ZIP\n' + '='.repeat(60) + '\n';
+  out += '  Data/Hora     : ' + new Date().toLocaleString('pt-BR') + '\n';
+  out += '  Origem        : ' + source + '\n';
+  out += '  Total arquivos: ' + count + '\n';
+  if (filters.length) out += '  Filtros       : ' + filters.join(', ') + '\n';
+  out += '='.repeat(60) + '\n\n';
+  return out;
+}
+async function mapLimit(items, limit, mapper, task, onProgress) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  let done = 0;
+
+  async function runner() {
+    while (true) {
+      assertTask(task);
+      const index = cursor++;
+      if (index >= items.length) return;
+      try {
+        results[index] = await mapper(items[index], index);
+      } catch (error) {
+        if (isAbort(error)) throw error;
+        results[index] = null;
+      }
+      done++;
+      if (onProgress) onProgress(done, items.length);
+      if (done % 12 === 0) await cooperativeYield(true);
+    }
+  }
+
+  const runners = [];
+  const count = Math.min(Math.max(1, limit), Math.max(1, items.length));
+  for (let i = 0; i < count; i++) runners.push(runner());
+  await Promise.all(runners);
+  return results;
+}
+async function startCopy() {
+  if (S.activeTab === 'arb') {
+    const files = S.arbFiles.filter(function (item) { return S.arbChecked.has(item.id); });
+    if (!files.length) { toast('Nenhum avulso selecionado.', 'warn'); return; }
+    await genArbitraryOutput(files, $id('out-name-input').value.trim() || 'codigo_completo.txt');
+    return;
+  }
+  if (!S.allMeta.length) { toast('Selecione uma pasta de entrada.', 'warn'); return; }
+
+  let mode;
+  if (S.activeTab === 'ext') {
+    if (!S.selectedExts.size) { toast('Selecione ao menos uma extensão.', 'warn'); return; }
+    mode = 'ext';
+  } else if (S.activeTab === 'gi') {
+    mode = 'all';
+  } else {
+    if (!S.selectedFiles.size) { toast('Nenhum arquivo selecionado.', 'warn'); return; }
+    mode = 'selected';
+  }
+
+  try {
+    setStatus('Filtrando em segundo plano…');
+    const paths = await workerCall('filterOutput', {
+      mode: mode,
+      selectedPaths: Array.from(S.selectedFiles),
+      selectedExts: Array.from(S.selectedExts),
+      rules: S.giFileRules.concat(S.giManualRules),
+      ignorePatterns: S.ignorePatterns.slice(),
+      applyGI: S.applyGI
+    });
+    if (!paths.length) { toast('Nenhum arquivo de texto para copiar.', 'warn'); return; }
+    const metas = paths.map(function (path) { return S.metaByPath.get(path); }).filter(Boolean);
+    const totalSize = metas.reduce(function (sum, meta) { return sum + meta.size; }, 0);
+    if (totalSize > 10 * 1024 * 1024 && !confirm('⚠ Estimativa: ' +
+      (totalSize / 1024 / 1024).toFixed(1) + ' MB. Continuar?')) return;
+    await genOutput(metas, S.sourceName || 'Entrada', $id('out-name-input').value.trim() || 'codigo_completo.txt');
+  } catch (error) {
+    log('[ERRO] Preparação da saída: ' + error.message, 'err');
+    toast('Erro ao preparar a saída.', 'err');
+  }
+}
+async function genOutput(metas, source, outputName) {
+  const task = startTask('output');
+  $id('btn-start').disabled = true;
+  setProgress(0, metas.length, 'Lendo arquivos selecionados…');
+  log('Gerando output: ' + metas.length.toLocaleString('pt-BR') + ' arquivo(s)…', 'info');
+
+  try {
+    const contents = await mapLimit(metas, OUTPUT_CONCURRENCY, async function (meta) {
+      const text = await readMetaText(meta);
+      if (text.includes('\0')) return null;
+      return text;
+    }, task, function (done, total) {
+      setProgress(done, total, 'Lendo ' + done.toLocaleString('pt-BR') + '/' + total.toLocaleString('pt-BR') + '…');
+    });
+    assertTask(task);
+
+    const validPaths = [];
+    let skipped = 0;
+    for (let i = 0; i < metas.length; i++) {
+      if (contents[i] === null) skipped++;
+      else validPaths.push(metas[i].relPath);
+    }
+
+    setProgress('pulse', 100, 'Montando árvore no Worker…');
+    const treeText = await workerCall('buildTreeText', { paths: validPaths, rootName: source });
+    assertTask(task);
+
+    const filters = [];
+    if (S.ignorePatterns.length) filters.push('padrões globais');
+    if (S.applyGI) filters.push('.gitignore');
+    const parts = [buildHeader(source, validPaths.length, filters)];
+
+    for (let i = 0; i < metas.length; i++) {
+      if (contents[i] === null) continue;
+      const meta = metas[i];
+      parts.push(SEP + '\n');
+      parts.push('Conteúdo de ' + meta.name + ' (caminho: ' + meta.relPath + ') [enc: utf-8]:\n');
+      parts.push(SEP + '\n');
+      parts.push(contents[i]);
+      parts.push('\n\n');
+    }
+    parts.push('\n' + SEP + '\nEstrutura de pastas:\n' + SEP + '\n');
+    parts.push(treeText);
+
+    const outputBlob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
+    S.lastOutputBlob = outputBlob;
+    S.lastOutputName = outputName;
+    setProgress(null);
+    log('✓ ' + validPaths.length.toLocaleString('pt-BR') + ' arquivo(s) gerado(s). ' +
+      skipped.toLocaleString('pt-BR') + ' ignorado(s).', 'ok');
+    toast('✓ Saída pronta!', 'ok');
+    await showOutputModal(outputBlob, outputName, validPaths.length);
+  } catch (error) {
+    if (isAbort(error)) {
+      log('Geração cancelada.', 'warn');
+      toast('Geração cancelada.', 'warn');
+    } else {
+      log('[ERRO] Geração: ' + error.message, 'err');
+      toast('Erro ao gerar a saída.', 'err');
+    }
+  } finally {
+    $id('btn-start').disabled = false;
+    setProgress(null);
+    finishTask(task);
+  }
+}
+async function genArbitraryOutput(files, outputName) {
+  const textFiles = files.filter(function (item) { return !item.isBinary; });
+  if (!textFiles.length) { toast('Nenhum arquivo de texto selecionado.', 'warn'); return; }
+  const task = startTask('output-arbitrary');
+  $id('btn-start').disabled = true;
+  setProgress(0, textFiles.length, 'Lendo arquivos avulsos…');
+
+  try {
+    const contents = await mapLimit(textFiles, OUTPUT_CONCURRENCY, async function (item) {
+      const text = await item.file.text();
+      return text.includes('\0') ? null : text;
+    }, task, function (done, total) {
+      setProgress(done, total, 'Lendo ' + done + '/' + total + '…');
+    });
+    assertTask(task);
+
+    const valid = [];
+    for (let i = 0; i < textFiles.length; i++) {
+      if (contents[i] !== null) valid.push(textFiles[i]);
+    }
+    const parts = [buildHeader('Arquivos Avulsos', valid.length, [])];
+    let validIndex = 0;
+    for (let i = 0; i < textFiles.length; i++) {
+      if (contents[i] === null) continue;
+      const item = valid[validIndex++];
+      parts.push(SEP + '\nConteúdo de ' + item.name + ':\n' + SEP + '\n');
+      parts.push(contents[i]);
+      parts.push('\n\n');
+    }
+    parts.push('\n' + SEP + '\nArquivos:\n' + SEP + '\n');
+    valid.forEach(function (item) { parts.push('- ' + item.name + '\n'); });
+
+    const outputBlob = new Blob(parts, { type: 'text/plain;charset=utf-8' });
+    S.lastOutputBlob = outputBlob;
+    S.lastOutputName = outputName;
+    toast('✓ ' + valid.length + ' avulso(s) prontos!', 'ok');
+    await showOutputModal(outputBlob, outputName, valid.length);
+  } catch (error) {
+    if (isAbort(error)) toast('Geração cancelada.', 'warn');
+    else { log('[ERRO] Avulsos: ' + error.message, 'err'); toast('Erro ao gerar a saída.', 'err'); }
+  } finally {
+    $id('btn-start').disabled = false;
+    setProgress(null);
+    finishTask(task);
+  }
+}
+
+// ============================================================
+// MODAL, DOWNLOAD E CLIPBOARD
+// ============================================================
+async function showOutputModal(blob, filename, count) {
+  const previewBlob = blob.slice(0, MODAL_PREVIEW_BYTES);
+  let preview = await previewBlob.text();
+  if (blob.size > MODAL_PREVIEW_BYTES) {
+    preview += '\n\n[PREVIEW LIMITADO — o arquivo completo será usado no download e no clipboard]';
+  }
+  $id('modal-pre').textContent = preview;
+  $id('modal-stats').textContent = count.toLocaleString('pt-BR') + ' arq. | ' + fmtSize(blob.size) +
+    (blob.size > MODAL_PREVIEW_BYTES ? ' | preview parcial' : '');
+  $id('out-modal').classList.add('show');
+  $id('out-modal').dataset.fn = filename;
+}
+function closeModal() { $id('out-modal').classList.remove('show'); }
+async function copyBlobToClipboard(blob) {
+  if (!blob) { toast('Execute a cópia primeiro.', 'warn'); return; }
+  setStatus('Preparando clipboard…');
+  const text = await blob.text();
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast('✓ Copiado (' + text.length.toLocaleString('pt-BR') + ' caracteres)', 'ok');
+      setStatus('Copiado para o clipboard');
+      return;
+    } catch (_) { /* usa fallback */ }
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand('copy');
+  textarea.remove();
+  toast(ok ? '✓ Copiado!' : 'Não foi possível copiar automaticamente.', ok ? 'ok' : 'err');
+}
+function copyModalContent() { return copyBlobToClipboard(S.lastOutputBlob); }
+function clipboardCopy() { return copyBlobToClipboard(S.lastOutputBlob); }
+function fallbackDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+}
+async function downloadOutput() {
+  if (!S.lastOutputBlob) { toast('Nenhuma saída gerada.', 'warn'); return; }
+  const filename = S.lastOutputName || 'codigo_completo.txt';
+  if (typeof window.showSaveFilePicker === 'function') {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description: 'Arquivo de texto', accept: { 'text/plain': ['.txt'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(S.lastOutputBlob);
+      await writable.close();
+      toast('Arquivo salvo com sucesso!', 'ok');
+      log('Arquivo salvo: ' + filename, 'ok');
+      return;
+    } catch (error) {
+      if (isAbort(error)) return;
+      log('[AVISO] Salvamento moderno falhou; usando download comum.', 'warn');
+    }
+  }
+  fallbackDownload(S.lastOutputBlob, filename);
+  toast('Download iniciado!', 'ok');
+}
+
+// ============================================================
+// LIMPEZA E REINDEXAÇÃO
+// ============================================================
+function renderEmptyDataViews(message) {
+  extVirtual.setItems([], message || 'Selecione uma pasta de entrada.');
+  fileVirtual.setItems([], message || 'Selecione uma pasta de entrada.');
+  searchVirtual.setItems([], 'Use o campo acima para buscar.');
+  treeVirtual.setItems([], message || 'Selecione uma pasta de entrada.');
+  giPreviewVirtual.setItems([], 'Nenhum preview.');
+}
+async function reindexCurrentData() {
+  if (!S.allMeta.length) return;
+  try {
+    setStatus('Reordenando no Worker…');
+    const result = await workerCall('finalize', { sortMode: isNaturalSort() ? 'natural' : 'alpha' });
+    S.allMeta = result.paths.map(function (path) { return S.metaByPath.get(path); }).filter(Boolean);
+    S.extStats = result.extensions;
+    S.allExts = result.extensions.map(function (item) { return item.ext; });
+    S.treeCache.clear();
+    S.treeExpanded.clear();
+    S.treeStarted = false;
+    renderExtList();
+    await renderFileListNow();
+    if (S.activeTab === 'explorer') initTreeExplorer();
+    setStatus('Ordenação atualizada');
+  } catch (error) {
+    log('[ERRO] Reordenação: ' + error.message, 'err');
+  }
+}
+async function clearAll() {
+  cancelCurrentTask();
+  resetDatasetState();
+  S.sourceMode = 'none';
+  S.sourceName = '';
+  S.lastOutputBlob = null;
+  S.lastOutputName = 'codigo_completo.txt';
+  S.arbFiles = [];
+  S.arbChecked.clear();
+  S.nextArbId = 1;
+  await resetWorker();
+
+  $id('src-input').value = '';
+  $id('src-picker').value = '';
+  $id('zip-picker').value = '';
+  $id('out-name-input').value = 'codigo_completo.txt';
+  $id('ext-search').value = '';
+  $id('file-search').value = '';
+  $id('txt-search').value = '';
+  $id('gi-input').value = '';
+  $id('gi-status').textContent = '⚠ Nenhum diretório selecionado.';
+  $id('scan-mode-badge').textContent = 'sem pasta';
+  $id('scan-mode-badge').className = '';
+  renderEmptyDataViews('Selecione uma pasta de entrada.');
+  renderArbList();
+  renderGIRules();
+  updateCounter();
+  setStatus('Pronto', 'v2.3 — HTML otimizado + ZIP');
+  setProgress(null);
+  log('✓ Tudo limpo.', 'ok');
+  toast('Limpo!', 'ok');
+}
+
+// ============================================================
+// INICIALIZAÇÃO
+// ============================================================
+function initVirtualLists() {
+  extVirtual = new VirtualList($id('ext-list'), 38, renderExtRow, 'Selecione uma pasta de entrada.');
+  fileVirtual = new VirtualList($id('file-list'), 48, renderFileRow, 'Selecione uma pasta de entrada.');
+  searchVirtual = new VirtualList($id('search-list'), 38, renderSearchRow, 'Use o campo acima para buscar.');
+  treeVirtual = new VirtualList($id('tree-wrap'), 36, renderTreeRow, 'Selecione uma pasta de entrada.');
+  arbVirtual = new VirtualList($id('arb-drop'), 40, renderArbRow, '⬆ Arraste arquivos aqui ou use o botão abaixo');
+  giPreviewVirtual = new VirtualList($id('gi-preview'), 28, renderGIPreviewRow, 'Nenhum preview.');
+  renderEmptyDataViews('Selecione uma pasta de entrada.');
+  renderArbList();
+}
+
+$id('src-picker').addEventListener('change', function (event) {
+  scanLegacyFileList(event.target.files);
+});
+$id('zip-picker').addEventListener('change', function (event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (file) scanZipFile(file);
+});
+$id('sort-sel').addEventListener('change', reindexCurrentData);
+
+document.addEventListener('keydown', function (event) {
+  if (event.key === 'Escape') {
+    if ($id('ignore-modal').classList.contains('show')) closeIgnoreModal();
+    else if ($id('out-modal').classList.contains('show')) closeModal();
+    else if (S.task) cancelCurrentTask();
+  }
+});
+
+try {
+  applyTheme(localStorage.getItem('theme') || 'light');
+  const storedPatterns = JSON.parse(localStorage.getItem(IGNORE_STORAGE_KEY) || 'null');
+  S.ignorePatterns = Array.isArray(storedPatterns) ?
+    ALL_IGNORE_PATTERNS.filter(function (pattern) { return storedPatterns.includes(pattern); }) :
+    ALL_IGNORE_PATTERNS.slice();
+} catch (_) {
+  applyTheme('light');
+  S.ignorePatterns = ALL_IGNORE_PATTERNS.slice();
+}
+
+try {
+  initWorker();
+  initVirtualLists();
+  updateCounter();
+  updateIgnoreSummary();
+  const fastAvailable = typeof window.showDirectoryPicker === 'function';
+  $id('scan-mode-badge').textContent = fastAvailable ? 'modo rápido disponível' : 'modo compat.';
+  $id('btn-legacy').style.display = fastAvailable ? '' : 'none';
+  log('Copiador otimizado com ZIP iniciado. Web Workers ativos.', 'ok');
+  if (fastAvailable) {
+    log('File System Access API disponível: a poda de diretórios será usada.', 'ok');
+  } else {
+    log('File System Access API indisponível: o botão Pasta usará o modo compatível.', 'warn');
+  }
+  log('Suporte a ZIP pronto para uso em segundo plano.', 'ok');
+} catch (error) {
+  console.error(error);
+  alert('Não foi possível iniciar o Copiador de Código: ' + error.message);
+}
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2a48b06c9fff231',t:'MTc4NjU5MDc5Nw=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
