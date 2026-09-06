@@ -799,6 +799,7 @@ body.dark-mode .restore-drop{background:var(--surface2);}
     <div class="modal-foot">
       <button class="btn-cp-modal" onclick="copyModalContent()">📋 Copiar tudo</button>
       <button class="btn-dl" onclick="downloadOutput()">💾 Salvar .txt</button>
+      <button class="btn-dl" onclick="directDownloadOutput()">⬇️ Download</button>
       <button class="btn-close-modal" onclick="closeModal()">Fechar</button>
     </div>
   </div>
@@ -3685,6 +3686,13 @@ function fallbackDownload(blob, filename) {
   anchor.remove();
   setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
 }
+function directDownloadOutput() {
+  if (!S.lastOutputBlob) { toast('Nenhuma saída gerada.', 'warn'); return; }
+  const filename = S.lastOutputName || 'codigo_completo.txt';
+  fallbackDownload(S.lastOutputBlob, filename);
+  toast('Download iniciado!', 'ok');
+  log('Download iniciado: ' + filename, 'ok');
+}
 async function downloadOutput() {
   if (!S.lastOutputBlob) { toast('Nenhuma saída gerada.', 'warn'); return; }
   const filename = S.lastOutputName || 'codigo_completo.txt';
@@ -3840,5 +3848,6 @@ try {
   alert('Não foi possível iniciar o Copiador de Código: ' + error.message);
 }
 </script>
-<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2c2096c0da30bfc',t:'MTc4NjkwMDA2Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a2c2096c0da30bfc',t:'MTc4NjkwMDA2Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","spa":2}' crossorigin="anonymous"></script>
+</body>
 </html>
